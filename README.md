@@ -74,14 +74,14 @@ Example markdown once files are added:
 | 2 | retry(3) PokéAPI + local | ✅ |
 | 2 | takeUntilDestroyed cleanup | ✅ |
 | 3 | signal / computed / effect / toSignal | ✅ |
-| 3 | input() / output() all components | ⚠️ Partial (legacy on some child components) |
-| 3 | OnPush all components | ⚠️ Partial |
-| 4 | Chart.js radar, bar, doughnut + animation | ✅ |
+| 3 | input() / output() / model() | ✅ (`model()` on filters/page size; `output()` on team builder, detail panel) |
+| 3 | OnPush all components | ✅ |
+| 4 | Chart.js radar, **bar**, doughnut + animation | ✅ |
 | 5 | Advanced team builder `/team-builder` | ✅ |
 | 5 | Simple create-team modal | ✅ |
 | 6 | Full Pokédex table + filters + multi-select | ✅ |
 | 7 | Video + cry in detail panel | ✅ |
-| 8 | JSDoc every method | ⚠️ Stores & selectors documented; not every file |
+| 8 | JSDoc every method | ⚠️ Stores, services, charts documented; run `npm test` for coverage |
 | — | Unit tests (5+) | ✅ |
 | — | `ng build` / `ng serve` | ✅ |
 
@@ -96,9 +96,9 @@ Example markdown once files are added:
 | 5 Pokéball loading spinner | ✅ CSS in Pokédex tab |
 | 5 Toast slide-in/out | ✅ `ToastService` + slideOut animation |
 | 5 Sprite bounce on hover | ✅ Pokédex table sprites |
-| 1 Virtual scroll | Component exists, not wired to main tab |
-| 2 Drag-drop team builder | Not implemented |
-| 4 Web worker | Not implemented |
+| 1 Virtual scroll | ✅ `/pokedex-virtual` tab + `VirtualPokedexComponent` |
+| 2 Drag-drop team builder | ✅ Reorder chips + drag rows to team queue on Pokédex |
+| 4 Web worker | ✅ `stats-analysis.worker.ts` + team coverage banner |
 | 6 Offline IndexedDB Pokédex | ✅ `PokemonCacheService` |
 | 6 Offline banner + mutation queue | ✅ `OfflineService` + `MutationQueueService` |
 
@@ -120,7 +120,8 @@ npm test
 |------|------|
 | `/dashboard` | Dashboard + charts |
 
-| `/pokedex` | Pokédex table |
+| `/pokedex` | Pokédex table (10 / 25 / 50 per page) |
+| `/pokedex-virtual` | CDK virtual scroll Pokédex (Bonus 1) |
 | `/teams` | My Teams |
 | `/battles` | Battles + live log feed |
 | `/profile` | Editable trainer profile |

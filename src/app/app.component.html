@@ -19,6 +19,10 @@
           <span class="nav-icon">📋</span>
           <span *ngIf="!sidebarCollapsed()">Pokédex</span>
         </a>
+        <a routerLink="/pokedex-virtual" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'pokedex-virtual'">
+          <span class="nav-icon">📜</span>
+          <span *ngIf="!sidebarCollapsed()">Virtual Pokédex</span>
+        </a>
         <a routerLink="/teams" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'teams'">
           <span class="nav-icon">👥</span>
           <span *ngIf="!sidebarCollapsed()">My Teams</span>
@@ -107,6 +111,11 @@
       </app-dashboard>
     </div>
     
+    <!-- Virtual scrolling Pokédex (Bonus 1) -->
+    <div *ngIf="activeTab() === 'pokedex-virtual'" @tabContent class="pokedex-virtual-page">
+      <app-virtual-pokedex></app-virtual-pokedex>
+    </div>
+
     <!-- Pokédex Tab -->
     <div *ngIf="activeTab() === 'pokedex'" @tabContent class="pokedex-page">
       <section class="pokedex-hero">
@@ -222,6 +231,16 @@
         <p>No Pokémon found. Try adjusting your search.</p>
       </div>
 
+      <!-- Bonus 2: drop zone for dragging rows into the team builder queue -->
+      <div
+        class="team-drop-zone glass"
+        cdkDropList
+        (cdkDropListDropped)="onPokemonDroppedToTeam($event)">
+        <span class="drop-icon">⇅</span>
+        <p>Drag a Pokémon row here to queue it for the Team Builder (max 6).</p>
+        <small *ngIf="modalPreselectedIds().length">Queued IDs: {{ modalPreselectedIds().join(', ') }}</small>
+      </div>
+
       <!-- Pokémon Table -->
       <div *ngIf="!loading() && totalResults() > 0" class="pokedex-table glass">
         <table>
@@ -238,13 +257,16 @@
               <th (click)="onSortChange('special-defense')">SP. DEF <span *ngIf="sortBy() === 'special-defense'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
               <th (click)="onSortChange('speed')">SPEED <span *ngIf="sortBy() === 'speed'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
               <th (click)="onSortChange('total')">TOTAL <span *ngIf="sortBy() === 'total'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
-              <th></th>
+              <th class="view-col-header">VIEW</th>
             </tr>
           </thead>
           <tbody>
             <tr
               *ngFor="let pokemon of paginatedPokemon(); let i = index"
               class="stagger-row"
+              cdkDrag
+              cdkDragLockAxis="y"
+              [cdkDragData]="pokemon"
               [style.animation-delay.ms]="i * 45"
               (click)="selectPokemon(pokemon)"
               [class.selected-row]="isRowSelected(pokemon.id)"
@@ -270,8 +292,8 @@
               <td>{{ getStat(pokemon, 'special-defense') }}</td>
               <td>{{ getStat(pokemon, 'speed') }}</td>
               <td class="total-stat">{{ getTotalStats(pokemon) }}</td>
-              <td>
-                <button type="button" class="view-eye-btn" (click)="selectPokemon(pokemon); $event.stopPropagation()" title="View">👁</button>
+              <td class="view-cell" (click)="$event.stopPropagation()">
+                <button type="button" class="view-eye-btn" (click)="selectPokemon(pokemon)" title="View details">👁</button>
               </td>
             </tr>
           </tbody>

@@ -1,12 +1,15 @@
-import { Component, OnInit, signal, inject, ChangeDetectionStrategy, DestroyRef } from '@angular/core';
+import { Component, OnInit, signal, model, output, inject, ChangeDetectionStrategy, DestroyRef, effect } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
+import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormArray, Validators, AbstractControl } from '@angular/forms';
 import { PokemonStore, Pokemon } from '../../state/pokemon.store';
 import { TrainerStore, Team } from '../../state/trainer.store';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
-import { of } from 'rxjs';
+import { uniqueTeamNameValidator, evSpreadValidator } from '../../utils/validators';
+import { StatsAnalysisService } from '../../services/stats-analysis.service';
+import { TeamCoverageResult } from '../../workers/stats-analysis.worker';
+import { take } from 'rxjs/operators';
 
 interface PokemonOption {
   id: number;
@@ -18,7 +21,7 @@ interface PokemonOption {
 @Component({
   selector: 'app-team-builder',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, DragDropModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="team-builder-container theme-dark-page">
@@ -77,9 +80,10 @@ interface PokemonOption {
             </div>
           </div>
           
-          <!-- Selected Pokémon Chips -->
-          <div class="selected-pokemon">
-            <div *ngFor="let pokemon of selectedPokemon(); let i = index" class="pokemon-chip">
+          <!-- Selected Pokémon Chips (drag to reorder — Bonus 2) -->
+          <p class="drag-hint">Drag chips to reorder your squad.</p>
+          <div class="selected-pokemon" cdkDropList (cdkDropListDropped)="dropReorderTeam($event)">
+            <div *ngFor="let pokemon of selectedPokemon(); let i = index" class="pokemon-chip" cdkDrag>
               <img [src]="pokemon.sprite" [alt]="pokemon.name">
               <span>{{ pokemon.name | titlecase }}</span>
               <button type="button" class="remove-chip" (click)="removePokemon(i)">✕</button>
@@ -180,6 +184,13 @@ interface PokemonOption {
           </select>
         </div>
         
+        <!-- Web Worker coverage (Bonus 4) -->
+        <div class="coverage-banner" *ngIf="coverageResult() as cov">
+          <strong>Worker analysis ({{ cov.elapsedMs | number:'1.0-1' }}ms):</strong>
+          <p>Super effective vs: {{ cov.superEffectiveAgainst.join(', ') || '—' }}</p>
+          <p>Weak coverage: {{ cov.uncoveredTypes.join(', ') || '—' }}</p>
+        </div>
+
         <!-- Type Weakness Warning Banner -->
         <div class="warning-banner" *ngIf="hasTypeWeaknessGap()">
           <span class="warning-icon">⚠️</span>
@@ -652,25 +663,68 @@ interface PokemonOption {
     .type-dark { background: #705848; }
     .type-steel { background: #B8B8D0; }
     .type-fairy { background: #EE99AC; }
+
+    .drag-hint {
+      font-size: 12px;
+      color: #94a3b8;
+      margin: 8px 0 4px;
+    }
+
+    .selected-pokemon .pokemon-chip {
+      cursor: grab;
+    }
+
+    .coverage-banner {
+      margin: 16px 0;
+      padding: 12px 16px;
+      border-radius: 10px;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(96, 165, 250, 0.35);
+      font-size: 13px;
+      color: #e2e8f0;
+    }
   `]
 })
 export class TeamBuilderComponent implements OnInit {
   private fb = inject(FormBuilder);
   private pokemonStore = inject(PokemonStore);
   private trainerStore = inject(TrainerStore);
+  private statsAnalysis = inject(StatsAnalysisService);
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
 
+  /** Emitted when a team is persisted successfully. */
+  teamSaved = output<Team>();
+
   teamForm!: FormGroup;
-  searchTerm = signal('');
+  /** Two-way search query (model API). */
+  searchTerm = model('');
   searchResults = signal<PokemonOption[]>([]);
   selectedPokemon = signal<PokemonOption[]>([]);
   competitiveMode = signal(false);
   toastMessage = signal('');
   toastType = signal('');
   existingTeams: Team[] = [];
+  coverageResult = signal<TeamCoverageResult | null>(null);
   private allPokemon: Pokemon[] = [];
-  
+
+  constructor() {
+    effect(() => {
+      const types = this.selectedPokemon().flatMap((p) => p.types);
+      if (!types.length) {
+        this.coverageResult.set(null);
+        return;
+      }
+      this.statsAnalysis
+        .analyzeTeamCoverage(types)
+        .pipe(take(1), takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (result) => this.coverageResult.set(result),
+          error: () => this.coverageResult.set(null),
+        });
+    }, { allowSignalWrites: true });
+  }
+
   get pokemonArray(): FormArray {
     return this.teamForm.get('pokemonArray') as FormArray;
   }
@@ -716,18 +770,23 @@ export class TeamBuilderComponent implements OnInit {
   }
   
   setupAsyncValidator() {
-    this.teamForm.get('teamName')?.setAsyncValidators((control: AbstractControl) => {
-      return of(control.value).pipe(
-        debounceTime(500),
-        distinctUntilChanged(),
-        switchMap(name => {
-          const exists = this.existingTeams.some(team => 
-            team.name.toLowerCase() === name?.toLowerCase()
-          );
-          return of(exists ? { uniqueName: true } : null);
-        })
-      );
-    });
+    this.teamForm.get('teamName')?.setAsyncValidators(
+      uniqueTeamNameValidator(() => this.existingTeams.map((team) => team.name))
+    );
+  }
+
+  /**
+   * Reorders selected Pokémon and matching FormArray rows after drag-drop.
+   *
+   * @param event - CDK drop event
+   */
+  dropReorderTeam(event: CdkDragDrop<PokemonOption[]>): void {
+    const list = [...this.selectedPokemon()];
+    moveItemInArray(list, event.previousIndex, event.currentIndex);
+    const ctrl = this.pokemonArray.at(event.previousIndex);
+    this.pokemonArray.removeAt(event.previousIndex);
+    this.pokemonArray.insert(event.currentIndex, ctrl);
+    this.selectedPokemon.set(list);
   }
   
   onSearchChange(term: string) {
@@ -781,6 +840,7 @@ export class TeamBuilderComponent implements OnInit {
     });
     
     this.pokemonArray.push(pokemonGroup);
+    this.applyEvValidators();
     this.teamForm.get('pokemonArray')?.updateValueAndValidity();
   }
   
@@ -791,6 +851,23 @@ export class TeamBuilderComponent implements OnInit {
   
   toggleCompetitiveMode(enabled: boolean) {
     this.competitiveMode.set(enabled);
+    this.applyEvValidators();
+  }
+
+  /**
+   * Applies or removes shared EV spread validator on each Pokémon row.
+   */
+  applyEvValidators(): void {
+    this.pokemonArray.controls.forEach((ctrl) => {
+      const speed = ctrl.get('evSpeed');
+      if (!speed) return;
+      if (this.competitiveMode()) {
+        speed.addValidators(evSpreadValidator);
+      } else {
+        speed.removeValidators(evSpreadValidator);
+      }
+      speed.updateValueAndValidity();
+    });
   }
   
   getEvTotal(pokemonCtrl: AbstractControl): number {
@@ -891,7 +968,8 @@ export class TeamBuilderComponent implements OnInit {
       .createTeam(1, teamData.name, teamData.pokemon_ids)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: () => {
+        next: (team) => {
+          this.teamSaved.emit(team);
           this.showToast('Team saved successfully!', 'success');
           this.resetForm(false);
           this.router.navigate(['/teams']);

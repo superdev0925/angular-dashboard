@@ -2,7 +2,13 @@ import { Injectable, inject, DestroyRef } from '@angular/core';
 import { BehaviorSubject, Observable, throwError, of, from } from 'rxjs';
 import { map, catchError, retry, tap, debounceTime, distinctUntilChanged, shareReplay, switchMap } from 'rxjs/operators';
 import { Apollo } from 'apollo-angular';
-import { GET_POKEMON, GET_POKEMON_BY_ID, GET_TYPES } from '../core/graphql/pokemon.queries';
+import {
+  GET_POKEMON,
+  GET_POKEMON_BY_ID,
+  GET_TYPES,
+  GET_SPECIES_EVOLUTION_CHAIN_ID,
+  GET_EVOLUTION_CHAIN,
+} from '../core/graphql/pokemon.queries';
 import { PokemonCacheService } from '../services/pokemon-cache.service';
 
 export interface Pokemon {
@@ -139,18 +145,54 @@ export class PokemonStore {
    */
   fetchPokemonById(id: number): Observable<Pokemon> {
     this.setLoading(true);
-    
+
     return this.apollo.query<any>({
       query: GET_POKEMON_BY_ID,
-      variables: { id }
+      variables: { id },
+      fetchPolicy: 'network-only',
     }).pipe(
       retry({ count: 3, delay: 1000 }),
-      map((result) => {
-        const pokemon = this.transformSinglePokemon(result.data.pokemon_v2_pokemon_by_pk);
-        this.updateState({ selectedPokemon: pokemon, loading: false });
-        return pokemon;
+      switchMap((result) => {
+        const raw = result?.data?.pokemon_v2_pokemon_by_pk;
+        if (!raw) {
+          return throwError(() => new Error('Pokémon not found'));
+        }
+        const speciesId = raw.pokemon_species_id as number | undefined;
+        if (!speciesId) {
+          const pokemon = this.transformSinglePokemon(raw, []);
+          this.updateState({ selectedPokemon: pokemon, loading: false });
+          return of(pokemon);
+        }
+        return this.apollo.query<any>({
+          query: GET_SPECIES_EVOLUTION_CHAIN_ID,
+          variables: { speciesId },
+        }).pipe(
+          switchMap((speciesResult) => {
+            const chainId =
+              speciesResult?.data?.pokemon_v2_pokemonspecies_by_pk?.evolution_chain_id;
+            if (!chainId) {
+              const pokemon = this.transformSinglePokemon(raw, []);
+              this.updateState({ selectedPokemon: pokemon, loading: false });
+              return of(pokemon);
+            }
+            return this.apollo.query<any>({
+              query: GET_EVOLUTION_CHAIN,
+              variables: { chainId },
+            }).pipe(
+              map((evoResult) => {
+                const chain =
+                  evoResult?.data?.pokemon_v2_pokemonspecies?.map((s: { name: string }) => s.name) ??
+                  [];
+                const pokemon = this.transformSinglePokemon(raw, chain);
+                this.updateState({ selectedPokemon: pokemon, loading: false });
+                return pokemon;
+              })
+            );
+          })
+        );
       }),
       catchError((error) => {
+        this.setLoading(false);
         this.setError(error.message);
         return throwError(() => error);
       })
@@ -247,25 +289,16 @@ export class PokemonStore {
    * @param data - Raw GraphQL data
    * @returns Pokemon - Transformed Pokémon
    */
-  private transformSinglePokemon(data: any): Pokemon {
+  private transformSinglePokemon(data: any, evolutionChain: string[] = []): Pokemon {
     // Safely extract abilities
     let abilities: any[] = [];
     if (data.pokemon_v2_pokemonabilities && Array.isArray(data.pokemon_v2_pokemonabilities)) {
       abilities = data.pokemon_v2_pokemonabilities;
     }
-    
+
     const moves =
       data.pokemon_v2_pokemonmoves
         ?.map((m: any) => m?.pokemon_v2_move?.name)
-        .filter(Boolean) ?? [];
-
-    const evolutionChain =
-      data.pokemon_v2_pokemonspecies?.pokemon_v2_evolutionchain?.pokemon_v2_pokemonevolutionchain
-        ?.map((step: any) => {
-          const name = step?.pokemon_v2_pokemonspecies?.name ?? '';
-          const level = step?.min_level != null ? ` (Lv.${step.min_level})` : '';
-          return `${name}${level}`.trim();
-        })
         .filter(Boolean) ?? [];
 
     return {

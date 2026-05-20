@@ -138,6 +138,30 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
             </ng-template>
           </section>
 
+          <div class="moves-section" *ngIf="pokemon()?.moves?.length">
+            <h3>Moves</h3>
+            <ul class="tag-list">
+              <li *ngFor="let move of (pokemon()?.moves || [])">{{ move | titlecase }}</li>
+            </ul>
+          </div>
+
+          <div class="evolution-section" *ngIf="pokemon()?.evolutionChain?.length">
+            <h3>Evolution Chain</h3>
+            <ol class="evo-chain">
+              <li *ngFor="let step of (pokemon()?.evolutionChain || [])">{{ step | titlecase }}</li>
+            </ol>
+          </div>
+
+          <div class="abilities-section" *ngIf="pokemon()?.abilities?.length">
+            <h3>Abilities</h3>
+            <ul class="ability-list">
+              <li *ngFor="let row of (pokemon()?.abilities || [])">
+                <strong>{{ row?.pokemon_v2_ability?.name | titlecase }}</strong>
+                <span *ngIf="row?.is_hidden"> (Hidden)</span>
+              </li>
+            </ul>
+          </div>
+
           <div class="stats-section">
             <h3>Base Stats</h3>
             <div class="stats-grid">
@@ -272,6 +296,26 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
 
     .cry-section,
     .media-section,
+    .moves-section,
+    .evolution-section,
+    .abilities-section {
+      margin: 16px 0;
+    }
+
+    .tag-list,
+    .ability-list,
+    .evo-chain {
+      margin: 0;
+      padding-left: 18px;
+      color: #cbd5e1;
+    }
+
+    .tag-list li,
+    .ability-list li,
+    .evo-chain li {
+      margin: 4px 0;
+    }
+
     .stats-section {
       margin-bottom: 24px;
     }

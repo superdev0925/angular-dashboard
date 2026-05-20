@@ -1,5 +1,6 @@
 import { Component, OnInit, signal, model, computed, inject, ChangeDetectionStrategy, effect, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { DragDropModule, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -24,7 +25,7 @@ import { tabContentAnimation } from './animations/route.animations';
 @Component({
   selector: 'app-main',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, TeamBuilderModalComponent, TeamBuilderComponent,
+  imports: [CommonModule, FormsModule, RouterModule, DragDropModule, TeamBuilderModalComponent, TeamBuilderComponent,
     PokemonDetailComponent, DashboardComponent, DoughnutChartComponent, ToastContainerComponent, TypeHighlightDirective,
     VirtualPokedexComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -298,7 +299,7 @@ export class AppComponent implements OnInit {
   }
 
   /** Switches tab and updates the URL route. */
-  setActiveTab(tab: 'dashboard' | 'pokedex' | 'teams' | 'battles' | 'profile' | 'team-builder') {
+  setActiveTab(tab: 'dashboard' | 'pokedex' | 'pokedex-virtual' | 'teams' | 'battles' | 'profile' | 'team-builder') {
     this.activeTab.set(tab);
     this.router.navigate(['/' + tab]);
   }
@@ -307,6 +308,7 @@ export class AppComponent implements OnInit {
     const titles: { [key: string]: string } = {
       dashboard: 'Dashboard',
       pokedex: 'Pokédex',
+      'pokedex-virtual': 'Virtual Pokédex',
       teams: 'My Teams',
       battles: 'Battle Log',
       profile: 'Profile',
@@ -332,6 +334,7 @@ export class AppComponent implements OnInit {
     const placeholders: Record<string, string> = {
       dashboard: 'Search Pokémon, moves, etc...',
       pokedex: 'Search Pokémon, moves, abilities...',
+      'pokedex-virtual': 'Scroll to load more Pokémon...',
       teams: 'Search teams...',
       battles: 'Search battles...',
       profile: 'Search profile...',
@@ -344,6 +347,7 @@ export class AppComponent implements OnInit {
     const subtitles: Record<string, string> = {
       dashboard: 'Welcome back — here is your trainer overview',
       pokedex: 'Browse and compare Pokémon stats',
+      'pokedex-virtual': 'CDK virtual scroll with lazy batches of 20',
       teams: 'Build and manage your battle squads',
       battles: 'Track your victories and defeats',
       profile: 'Trainer info, badges, and statistics',
@@ -363,7 +367,15 @@ export class AppComponent implements OnInit {
 
   ngOnInit() {
     this.route.data.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((data) => {
-      const tab = data['tab'] as 'dashboard' | 'pokedex' | 'teams' | 'battles' | 'profile' | 'team-builder' | undefined;
+      const tab = data['tab'] as
+        | 'dashboard'
+        | 'pokedex'
+        | 'pokedex-virtual'
+        | 'teams'
+        | 'battles'
+        | 'profile'
+        | 'team-builder'
+        | undefined;
       if (tab) {
         this.activeTab.set(tab);
       }
@@ -498,11 +510,15 @@ export class AppComponent implements OnInit {
   }
 
   selectPokemon(pokemon: Pokemon): void {
-    // Fetch detailed information including abilities
+    // Open panel immediately with list row data; enrich from API in background
+    this.selectedPokemon.set(pokemon);
     this.pokemonStore.fetchPokemonById(pokemon.id).subscribe({
       next: (detailed) => {
         this.selectedPokemon.set(detailed);
-      }
+      },
+      error: () => {
+        this.showToast('Could not load full Pokémon details — showing cached row data', 'warning');
+      },
     });
   }
 
@@ -613,6 +629,21 @@ export class AppComponent implements OnInit {
 
   isRowSelected(id: number): boolean {
     return this.selectedRowIds().has(id);
+  }
+
+  /**
+   * Handles drag-and-drop from the Pokédex table into the team queue (Bonus 2).
+   *
+   * @param event - CDK drop event carrying Pokémon row data
+   */
+  onPokemonDroppedToTeam(event: CdkDragDrop<Pokemon>): void {
+    const pokemon = event.item.data as Pokemon;
+    if (!pokemon?.id) {
+      return;
+    }
+    const merged = [...new Set([...this.modalPreselectedIds(), pokemon.id])].slice(0, 6);
+    this.modalPreselectedIds.set(merged);
+    this.showToast(`${pokemon.name} queued for Team Builder`, 'success');
   }
 
   addSelectedToTeam(): void {

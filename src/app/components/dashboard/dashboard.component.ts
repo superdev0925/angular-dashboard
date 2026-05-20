@@ -4,14 +4,14 @@ import { FormsModule } from '@angular/forms';
 import { Pokemon } from '../../state/pokemon.store';
 import { Battle, Team } from '../../state/trainer.store';
 import { RadarChartComponent } from '../charts/radar-chart/radar-chart.component';
-import { BarChartComponent } from '../charts/bar-chart/bar-chart.component';
+import { LineChartComponent } from '../charts/line-chart/line-chart.component';
 import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.component';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, RadarChartComponent, BarChartComponent, DoughnutChartComponent],
+  imports: [CommonModule, FormsModule, RadarChartComponent, LineChartComponent, DoughnutChartComponent],
   template: `
     <div class="dashboard-dark">
       <section class="hero-banner">
@@ -96,7 +96,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
             <select class="chart-select" disabled><option>Monthly</option></select>
           </div>
           <div class="chart-body">
-            <app-bar-chart [battles]="battles()" [animate]="true"></app-bar-chart>
+            <app-line-chart [battles]="battles()" [animate]="true"></app-line-chart>
           </div>
         </div>
         <div class="chart-card glass">

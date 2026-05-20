@@ -35,14 +35,18 @@ Chart.register(...registerables);
   `]
 })
 
+/** Grouped bar chart for monthly battle wins vs losses. */
 export class BarChartComponent implements AfterViewInit, OnDestroy {
   battles = input<Battle[]>([]);
   animate = input(false);
   @ViewChild('barCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
-  
+
   private chart: Chart | null = null;
   private viewReady = false;
 
+  /**
+   * Rebuilds the chart when battle data or animation input changes.
+   */
   constructor() {
     effect(() => {
       this.battles();
@@ -52,6 +56,9 @@ export class BarChartComponent implements AfterViewInit, OnDestroy {
     });
   }
   
+  /**
+   * Creates the Chart.js instance after the canvas is available.
+   */
   ngAfterViewInit(): void {
     setTimeout(() => {
       this.createChart();
@@ -59,12 +66,20 @@ export class BarChartComponent implements AfterViewInit, OnDestroy {
     this.viewReady = true;
   }
   
+  /**
+   * Destroys the chart to prevent memory leaks.
+   */
   ngOnDestroy(): void {
     if (this.chart) {
       this.chart.destroy();
       this.chart = null;
     }
   }
+  /**
+   * Aggregates battles into monthly win/loss series for the chart datasets.
+   *
+   * @returns Monthly labels and win/loss counts
+   */
   private getMonthlyData(): { months: string[], wins: number[], losses: number[] } {
     const battles = this.battles();
     if (!battles || battles.length === 0) {
@@ -94,6 +109,9 @@ export class BarChartComponent implements AfterViewInit, OnDestroy {
     return { months: sortedMonths, wins, losses };
   }
   
+  /**
+   * Instantiates the grouped bar chart on the canvas.
+   */
   private createChart(): void {
     if (!this.canvasRef || !this.canvasRef.nativeElement) {
       console.log('Canvas not ready');
@@ -208,6 +226,9 @@ export class BarChartComponent implements AfterViewInit, OnDestroy {
     }
   }
   
+  /**
+   * Updates chart datasets when battle input changes.
+   */
   private updateChart(): void {
     if (this.chart) {
       const { months, wins, losses } = this.getMonthlyData();

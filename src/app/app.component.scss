@@ -298,6 +298,29 @@
   }
 }
 
+/* Bonus 2: drag rows into team queue */
+.team-drop-zone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  border: 2px dashed rgba(124, 58, 237, 0.45);
+  border-radius: 12px;
+  color: #cbd5e1;
+  font-size: 14px;
+
+  .drop-icon {
+    font-size: 1.25rem;
+    color: #a78bfa;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
 /* Pokédex Table */
 .pokedex-table {
   background: white;

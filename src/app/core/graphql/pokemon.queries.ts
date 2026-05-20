@@ -63,24 +63,38 @@ export const GET_POKEMON_BY_ID = gql`
           }
         }
       }
+      pokemon_species_id
       pokemon_v2_pokemonmoves(limit: 12, order_by: {move_id: asc}) {
         pokemon_v2_move {
           name
         }
       }
-      pokemon_v2_pokemonspecies {
-        pokemon_v2_evolutionchain {
-          pokemon_v2_pokemonevolutionchain(order_by: {id: asc}) {
-            min_level
-            pokemon_v2_pokemonspecies {
-              name
-            }
-          }
-        }
-      }
       pokemon_v2_pokemonsprites {
         sprites
       }
+    }
+  }
+`;
+
+/**
+ * Reads evolution_chain_id for a species (used after pokemon detail fetch).
+ */
+export const GET_SPECIES_EVOLUTION_CHAIN_ID = gql`
+  query GetSpeciesEvolutionChainId($speciesId: Int!) {
+    pokemon_v2_pokemonspecies_by_pk(id: $speciesId) {
+      evolution_chain_id
+    }
+  }
+`;
+
+/**
+ * Fetches species evolution chain members by chain id (separate query — not nested on pokemon).
+ */
+export const GET_EVOLUTION_CHAIN = gql`
+  query GetEvolutionChain($chainId: Int!) {
+    pokemon_v2_pokemonspecies(where: { evolution_chain_id: { _eq: $chainId } }, order_by: { order: asc }) {
+      name
+      order
     }
   }
 `;
