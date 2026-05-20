@@ -168,7 +168,7 @@ export class AppComponent implements OnInit {
     return battlesList?.filter(b => b?.result === 'loss').length || 0;
   });
 
-  dashboardChartPokemonId = signal(94);
+  dashboardChartPokemonId = signal(1);
 
   chartPokemonOptions = computed(() => this.pokemonList().slice(0, 151));
 
@@ -400,9 +400,9 @@ export class AppComponent implements OnInit {
     this.pokemonStore.pokemon$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(data => {
       this.pokemonList.set(data || []);
       this.loading.set(false);
-      const gengar = data?.find((p) => p.id === 94);
-      if (gengar && !this.selectedPokemon()) {
-        this.dashboardChartPokemonId.set(94);
+      const list = data ?? [];
+      if (list.length && !list.some((p) => p.id === this.dashboardChartPokemonId())) {
+        this.dashboardChartPokemonId.set(list[0].id);
       }
     });
     

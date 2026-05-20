@@ -1,11 +1,19 @@
-import { ChangeDetectionStrategy, Component, effect, input, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  effect,
+  input,
+  ViewChild,
+  ElementRef,
+  AfterViewInit,
+  OnDestroy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Chart, ChartConfiguration, registerables } from 'chart.js';
-import { Pokemon } from '../../../state/pokemon.store';
-import { OnDestroy } from '@angular/core';
 
-// Register all Chart.js components
 Chart.register(...registerables);
+
+const RADAR_LABELS = ['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed'];
 
 @Component({
   selector: 'app-radar-chart',
@@ -21,190 +29,198 @@ Chart.register(...registerables);
     .radar-chart-wrapper {
       position: relative;
       width: 100%;
-      height: 320px;
+      height: 280px;
       display: block;
     }
     .radar-canvas {
+      display: block;
       width: 100% !important;
-      height: 320px !important;
+      height: 280px !important;
     }
     .chart-animated {
       animation: chartReveal 0.5s ease-out both;
     }
-    .chart-animated .radar-canvas {
-      animation: radarFloat 4.2s ease-in-out 0.65s infinite;
-    }
     @keyframes chartReveal {
-      from { opacity: 0; transform: scale(0.92); }
-      to { opacity: 1; transform: scale(1); }
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    @keyframes radarFloat {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.015); }
-    }
-  `]
+  `],
 })
 export class RadarChartComponent implements AfterViewInit, OnDestroy {
-  pokemon = input<Pokemon | null>(null);
+  /** Six stat values: HP, Atk, Def, SpA, SpD, Spe */
+  stats = input<number[]>([0, 0, 0, 0, 0, 0]);
+  pokemonName = input('Pokémon');
   dark = input(false);
   animate = input(false);
+
   @ViewChild('radarCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
-  
+
   private chart: Chart | null = null;
   private viewReady = false;
+  private renderTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     effect(() => {
-      this.pokemon();
+      this.stats();
+      this.pokemonName();
       this.dark();
       this.animate();
-      if (!this.viewReady) return;
-      queueMicrotask(() => this.updateChart());
+      if (!this.viewReady) {
+        return;
+      }
+      this.scheduleRender();
     });
   }
-  
+
+  /**
+   * Waits for layout, then draws the chart (dashboard tab uses *ngIf).
+   */
+  ngAfterViewInit(): void {
+    this.viewReady = true;
+    this.scheduleRender(120);
+  }
+
+  /**
+   * Destroys the Chart.js instance on teardown.
+   */
   ngOnDestroy(): void {
+    if (this.renderTimer) {
+      clearTimeout(this.renderTimer);
+    }
+    this.destroyChart();
+  }
+
+  /**
+   * Debounces chart rebuilds so the canvas has dimensions.
+   *
+   * @param delayMs - Delay before render
+   */
+  private scheduleRender(delayMs = 0): void {
+    if (this.renderTimer) {
+      clearTimeout(this.renderTimer);
+    }
+    this.renderTimer = setTimeout(() => {
+      this.renderTimer = null;
+      this.renderChart();
+    }, delayMs);
+  }
+
+  /**
+   * Normalizes stat array to exactly six numeric values.
+   *
+   * @returns number[] - Stat values for radar axes
+   */
+  private normalizedStats(): number[] {
+    const raw = this.stats() ?? [];
+    const values = RADAR_LABELS.map((_, i) => {
+      const v = Number(raw[i]);
+      return Number.isFinite(v) ? v : 0;
+    });
+    return values;
+  }
+
+  /**
+   * Destroys any existing chart instance.
+   */
+  private destroyChart(): void {
     if (this.chart) {
       this.chart.destroy();
       this.chart = null;
     }
   }
-  
-  ngAfterViewInit(): void {
-    setTimeout(() => {
-      this.viewReady = true;
-      this.createChart();
-    }, 100);
-  }
-  
+
   /**
-   * Reads base stats in radar axis order (HP → Speed).
-   *
-   * @returns number[] - Six stat values for Chart.js
+   * Rebuilds the radar chart from current inputs.
    */
-  private getStatValues(): number[] {
-    const p = this.pokemon();
-    if (!p?.stats?.length) {
-      return [0, 0, 0, 0, 0, 0];
+  private renderChart(): void {
+    const canvas = this.canvasRef?.nativeElement;
+    if (!canvas) {
+      return;
     }
 
-    const order = ['hp', 'attack', 'defense', 'special-attack', 'special-defense', 'speed'];
-    return order.map((name) => {
-      const row = p.stats.find((s) => {
-        const statName = (s?.stat?.name ?? '').toLowerCase().replace(/_/g, '-');
-        return statName === name;
-      });
-      return row?.base_stat ?? 0;
-    });
-  }
-  
-  private createChart(): void {
-    if (!this.canvasRef || !this.canvasRef.nativeElement) {
-      console.log('Canvas not ready');
-      return;
-    }
-    
-    const ctx = this.canvasRef.nativeElement.getContext('2d');
+    const ctx = canvas.getContext('2d');
     if (!ctx) {
-      console.log('Cannot get canvas context');
       return;
     }
-    
-    // Destroy existing chart
-    if (this.chart) {
-      this.chart.destroy();
-      this.chart = null;
-    }
-    
-    const statValues = this.getStatValues();
-    const pokemonName = this.pokemon()?.name || 'Pokemon';
-    
-    console.log('Creating radar chart for:', pokemonName, statValues);
-    
+
+    this.destroyChart();
+
+    const statValues = this.normalizedStats();
+    const label = this.pokemonName() || 'Pokémon';
+    const maxStat = Math.max(...statValues, 1);
+    const axisMax = Math.max(100, Math.ceil(maxStat / 50) * 50);
+
     const config: ChartConfiguration<'radar', number[], string> = {
       type: 'radar',
       data: {
-        labels: ['HP', 'Attack', 'Defense', 'Sp. Atk', 'Sp. Def', 'Speed'],
-        datasets: [{
-          label: pokemonName,
-          data: statValues,
-          backgroundColor: 'rgba(124, 58, 237, 0.25)',
-          borderColor: 'rgba(167, 139, 250, 1)',
-          borderWidth: 2,
-          pointBackgroundColor: 'rgba(167, 139, 250, 1)',
-          pointBorderColor: '#ffffff',
-          pointHoverBackgroundColor: '#ffffff',
-          pointHoverBorderColor: 'rgba(99, 102, 241, 1)',
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          fill: true,
-          tension: 0.1
-        }]
+        labels: [...RADAR_LABELS],
+        datasets: [
+          {
+            label,
+            data: statValues,
+            backgroundColor: 'rgba(124, 58, 237, 0.35)',
+            borderColor: 'rgba(167, 139, 250, 1)',
+            borderWidth: 2,
+            pointBackgroundColor: 'rgba(167, 139, 250, 1)',
+            pointBorderColor: '#ffffff',
+            pointHoverBackgroundColor: '#ffffff',
+            pointHoverBorderColor: 'rgba(99, 102, 241, 1)',
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            fill: true,
+          },
+        ],
       },
       options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         scales: {
           r: {
             beginAtZero: true,
-            max: 200,
+            min: 0,
+            max: axisMax,
             grid: {
-              color: this.dark() ? 'rgba(148, 163, 184, 0.15)' : 'rgba(0, 0, 0, 0.1)',
+              color: this.dark() ? 'rgba(148, 163, 184, 0.2)' : 'rgba(0, 0, 0, 0.1)',
             },
             angleLines: {
-              color: this.dark() ? 'rgba(148, 163, 184, 0.12)' : 'rgba(0, 0, 0, 0.1)',
+              color: this.dark() ? 'rgba(148, 163, 184, 0.15)' : 'rgba(0, 0, 0, 0.1)',
             },
             ticks: {
-              stepSize: 50,
+              stepSize: axisMax / 4,
               backdropColor: 'transparent',
               color: this.dark() ? '#64748b' : '#6b7280',
+              showLabelBackdrop: false,
             },
             pointLabels: {
-              font: { size: 12 },
-              color: this.dark() ? '#94a3b8' : '#374151',
-            }
-          }
+              font: { size: 11, weight: 'bold' },
+              color: this.dark() ? '#cbd5e1' : '#374151',
+            },
+          },
         },
         plugins: {
-          tooltip: {
-            callbacks: {
-              label: (context) => {
-                return `${context.label}: ${context.raw}`;
-              }
-            }
-          },
           legend: {
             position: 'top',
             labels: {
+              color: this.dark() ? '#e2e8f0' : '#374151',
               font: { size: 12 },
-              usePointStyle: true
-            }
-          }
+              usePointStyle: true,
+            },
+          },
+          tooltip: {
+            callbacks: {
+              label: (context) => `${context.label}: ${context.raw}`,
+            },
+          },
         },
         animation: {
-          duration: this.animate() ? 900 : 400,
+          duration: this.animate() ? 800 : 0,
           easing: 'easeOutQuart',
         },
       },
     };
-    
-    try {
-      this.chart = new Chart(ctx, config);
-      console.log('Radar chart created successfully');
-    } catch (error) {
-      console.error('Error creating radar chart:', error);
-    }
-  }
-  
-  private updateChart(): void {
-    const p = this.pokemon();
-    if (this.chart && p) {
-      const statValues = this.getStatValues();
-      this.chart.data.datasets[0].data = statValues;
-      this.chart.data.datasets[0].label = p.name;
-      this.chart.update();
-    } else {
-      this.createChart();
-    }
+
+    this.chart = new Chart(ctx, config);
+    this.chart.resize();
+    this.chart.update(this.animate() ? 'active' : 'none');
   }
 }

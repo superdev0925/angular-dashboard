@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Pokemon } from '../../state/pokemon.store';
 import { Battle, Team } from '../../state/trainer.store';
+import { PokemonSelectors } from '../../state/pokemon.selectors';
 import { RadarChartComponent } from '../charts/radar-chart/radar-chart.component';
 import { LineChartComponent } from '../charts/line-chart/line-chart.component';
 import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.component';
@@ -87,7 +88,12 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
             </select>
           </div>
           <div class="chart-body">
-            <app-radar-chart [pokemon]="chartPokemon()" [dark]="true" [animate]="true"></app-radar-chart>
+            <app-radar-chart
+              [stats]="chartPokemonStats()"
+              [pokemonName]="chartPokemon()?.name || 'Pokémon'"
+              [dark]="true"
+              [animate]="true">
+            </app-radar-chart>
           </div>
         </div>
         <div class="chart-card glass">
@@ -641,12 +647,43 @@ export class DashboardComponent {
   viewAllBattles = output<void>();
   viewAllProfile = output<void>();
 
-  chartPokemonId = signal(94);
+  private pokemonSelectors = inject(PokemonSelectors);
+
+  chartPokemonId = signal(1);
 
   chartPokemon = computed(() => {
     const id = this.chartPokemonId();
-    return this.chartPokemonOptions().find((p) => p.id === id) ?? this.selectedPokemon();
+    const options = this.chartPokemonOptions();
+    return options.find((p) => p.id === id) ?? options[0] ?? this.selectedPokemon();
   });
+
+  chartPokemonStats = computed(() => {
+    const p = this.chartPokemon();
+    if (!p?.stats?.length) {
+      return [0, 0, 0, 0, 0, 0];
+    }
+    return this.pokemonSelectors.getStatsForRadar(p);
+  });
+
+  constructor() {
+    effect(
+      () => {
+        const options = this.chartPokemonOptions();
+        const selected = this.selectedPokemon();
+        const currentId = this.chartPokemonId();
+
+        if (selected?.id && options.some((p) => p.id === selected.id)) {
+          this.chartPokemonId.set(selected.id);
+          return;
+        }
+
+        if (options.length && !options.some((p) => p.id === currentId)) {
+          this.chartPokemonId.set(options[0].id);
+        }
+      },
+      { allowSignalWrites: true }
+    );
+  }
 
   get pokemonRingPct(): number {
     return Math.min(100, (this.pokemonCount() / 151) * 100);

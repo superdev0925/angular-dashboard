@@ -139,8 +139,11 @@ export class PokemonSelectors {
    */
   getStatsForRadar(pokemon: Pokemon): number[] {
     const statOrder = ['hp', 'attack', 'defense', 'special-attack', 'special-defense', 'speed'];
-    return statOrder.map(statName => {
-      const stat = pokemon.stats.find(s => s.stat.name === statName);
+    return statOrder.map((statName) => {
+      const stat = pokemon.stats.find((s) => {
+        const name = (s.stat?.name ?? '').toLowerCase().replace(/_/g, '-');
+        return name === statName;
+      });
       return stat?.base_stat || 0;
     });
   }
