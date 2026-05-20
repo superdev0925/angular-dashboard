@@ -8,25 +8,35 @@ import { PokemonStore, Pokemon } from './state/pokemon.store';
 import { PokemonSelectors, PokemonFilter } from './state/pokemon.selectors';
 import { TrainerStore, Trainer, Team, Battle, BattleLog } from './state/trainer.store';
 import { TrainerSelectors } from './state/trainer.selectors';
-import { BehaviorSubject, Subject, fromEvent } from 'rxjs';
-import { takeUntil, tap } from 'rxjs/operators';
+import { BehaviorSubject, fromEvent } from 'rxjs';
 import { TeamBuilderModalComponent } from './components/team-builder-modal/team-builder-modal.component';
 import { TeamBuilderComponent } from './components/team-builder/team-builder.component';
 import { PokemonDetailComponent } from './components/pokemon-detail/pokemon-detail.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
-import { DoughnutChartComponent } from './components/charts/doughnut-chart/doughnut-chart.component';
 import { ToastContainerComponent } from './components/toast-container/toast-container.component';
-import { TypeHighlightDirective } from './directives/type-highlight.directive';
 import { VirtualPokedexComponent } from './components/virtual-pokedex/virtual-pokedex.component';
 import { ToastService } from './services/toast.service';
 import { OfflineService } from './services/offline.service';
 import { tabContentAnimation } from './animations/route.animations';
+import {
+  DEFAULT_TRAINER_AVATAR,
+  resolveOpponentAvatarUrl,
+  resolveTrainerAvatarUrl,
+} from './utils/avatar-url';
+import {
+  PokedexTableRowStats,
+  PokemonStatKey,
+  getPokedexTableRowStats,
+  getPokemonStat,
+  getPokemonTotal,
+} from './utils/pokemon-stats.util';
+import { ThemeService, ThemeMode } from './services/theme.service';
 
 @Component({
   selector: 'app-main',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterModule, DragDropModule, TeamBuilderModalComponent, TeamBuilderComponent,
-    PokemonDetailComponent, DashboardComponent, DoughnutChartComponent, ToastContainerComponent, TypeHighlightDirective,
+    PokemonDetailComponent, DashboardComponent, ToastContainerComponent,
     VirtualPokedexComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [tabContentAnimation],
@@ -40,14 +50,13 @@ export class AppComponent implements OnInit {
   private trainerSelectors = inject(TrainerSelectors);
   private toastService = inject(ToastService);
   readonly offlineService = inject(OfflineService);
+  readonly themeService = inject(ThemeService);
+
+  settingsOpen = signal(false);
 
   /** Placeholder row indices for skeleton shimmer (Bonus 5). */
   readonly skeletonRows = [0, 1, 2, 3, 4, 5, 6, 7];
 
-  /** Timestamp of the last battle-log poll (updates every 5s on Battles tab). */
-  lastBattleFeedPollAt = signal<Date | null>(null);
-
-  private battleLogPollStop$ = new Subject<void>();
   private destroyRef = inject(DestroyRef);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
@@ -73,6 +82,9 @@ export class AppComponent implements OnInit {
 
   // Signals
   sidebarCollapsed = signal(false);
+  /** ≤768px: persistent icon-only sidebar rail (no expand drawer). */
+  isMobile = signal(false);
+  sidebarRail = computed(() => this.sidebarCollapsed() || this.isMobile());
   selectedPokemon = signal<Pokemon | null>(null);
   loading = signal(false);
   currentTrainerId = signal(1);
@@ -95,8 +107,6 @@ export class AppComponent implements OnInit {
   profileRank = signal('');
   profileAvatar = signal('');
   private profileDraftDirty = signal(false);
-  /** Two-way filter for type-highlight directive (model API requirement). */
-  typeHighlightFilter = model('');
   battleOpponent = signal('');
   battleFilter = signal<'all' | 'win' | 'loss'>('all');
   profileEditing = signal(false);
@@ -116,11 +126,13 @@ export class AppComponent implements OnInit {
   pokemonList = signal<Pokemon[]>([]);
   allTypes = signal<any[]>([]);
 
+  readonly defaultTrainerAvatar = DEFAULT_TRAINER_AVATAR;
+
   /** Unified trainer avatar used across header/sidebar/profile with instant upload preview. */
   trainerAvatarUrl = computed(() =>
-    this.profileAvatar() ||
-    this.currentTrainer()?.avatar_url ||
-    'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/trainers/1.png'
+    resolveTrainerAvatarUrl(
+      this.profileAvatar() || this.currentTrainer()?.avatar_url
+    )
   );
 
   filteredPokemon = computed(() => this.debouncedFilteredPokemon() ?? []);
@@ -192,51 +204,6 @@ export class AppComponent implements OnInit {
     return this.pokemonList().length;
   });
 
-  statRangeDistribution = computed(() => {
-    const list = this.filteredPokemon();
-    const ranges = [
-      { name: '0–300', min: 0, max: 300, color: '#6366f1' },
-      { name: '301–400', min: 301, max: 400, color: '#8b5cf6' },
-      { name: '401–500', min: 401, max: 500, color: '#a78bfa' },
-      { name: '501–600', min: 501, max: 600, color: '#c4b5fd' },
-      { name: '601+', min: 601, max: 9999, color: '#7c3aed' },
-    ];
-    const counts = ranges.map((r) => ({
-      name: r.name,
-      count: list.filter((p) => {
-        const t = this.getTotalStats(p);
-        return t >= r.min && t <= r.max;
-      }).length,
-      color: r.color,
-    }));
-    return counts.filter((c) => c.count > 0);
-  });
-
-  typeBreakdownChart = computed(() => {
-    const counts = new Map<string, number>();
-    const list = this.pokemonList();
-    list.forEach((p) => {
-      p.types?.forEach((t) => {
-        const key = t.name;
-        counts.set(key, (counts.get(key) || 0) + 1);
-      });
-    });
-    if (counts.size === 0) return [];
-    const sorted = Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        count,
-        color: this.getTypeColor(name),
-      }));
-    const top = sorted.slice(0, 6);
-    const rest = sorted.slice(6).reduce((s, x) => s + x.count, 0);
-    if (rest > 0) {
-      top.push({ name: 'Others', count: rest, color: '#64748b' });
-    }
-    return top;
-  });
-
   featuredTypeIcons = computed(() => this.allTypes().slice(0, 4));
 
   activeTab = signal<'dashboard' | 'pokedex' | 'pokedex-virtual' | 'teams' | 'battles' | 'profile' | 'team-builder'>('dashboard');
@@ -269,33 +236,6 @@ export class AppComponent implements OnInit {
       });
     });
 
-    effect(() => {
-      const tab = this.activeTab();
-      this.battleLogPollStop$.next();
-
-      if (tab !== 'battles') {
-        return;
-      }
-
-      this.trainerStore.resetBattleLogPollCursor();
-      this.trainerStore
-        .fetchBattleLogs()
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe(() => this.lastBattleFeedPollAt.set(new Date()));
-
-      this.trainerStore
-        .pollBattleLogFeed(5000)
-        .pipe(
-          tap(() => this.lastBattleFeedPollAt.set(new Date())),
-          takeUntil(this.battleLogPollStop$),
-          takeUntilDestroyed(this.destroyRef)
-        )
-        .subscribe((newLogs) => {
-          if (newLogs.length) {
-            this.showToast(`${newLogs.length} new battle log entr${newLogs.length === 1 ? 'y' : 'ies'}`, 'info');
-          }
-        });
-    }, { allowSignalWrites: true });
   }
 
   /** Switches tab and updates the URL route. */
@@ -331,16 +271,7 @@ export class AppComponent implements OnInit {
 
   /** Search placeholder text based on the active tab. */
   getSearchPlaceholder(): string {
-    const placeholders: Record<string, string> = {
-      dashboard: 'Search Pokémon, moves, etc...',
-      pokedex: 'Search Pokémon, moves, abilities...',
-      'pokedex-virtual': 'Scroll to load more Pokémon...',
-      teams: 'Search teams...',
-      battles: 'Search battles...',
-      profile: 'Search profile...',
-      'team-builder': 'Search Pokémon to add to your team...',
-    };
-    return placeholders[this.activeTab()] ?? 'Search...';
+    return 'Search...';
   }
 
   getSubtitle(): string {
@@ -366,6 +297,14 @@ export class AppComponent implements OnInit {
   });
 
   ngOnInit() {
+    if (typeof window !== 'undefined') {
+      const mq = window.matchMedia('(max-width: 768px)');
+      const syncMobile = () => this.isMobile.set(mq.matches);
+      syncMobile();
+      mq.addEventListener('change', syncMobile);
+      this.destroyRef.onDestroy(() => mq.removeEventListener('change', syncMobile));
+    }
+
     this.route.data.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((data) => {
       const tab = data['tab'] as
         | 'dashboard'
@@ -460,6 +399,7 @@ export class AppComponent implements OnInit {
         error: (err) => console.error(err)
       });
 
+    this.trainerStore.fetchBattleLogs().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
   }
 
   /**
@@ -486,15 +426,21 @@ export class AppComponent implements OnInit {
     return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.id}.png`;
   }
 
-  getStat(pokemon: any, statName: string): number {
-    if (!pokemon || !pokemon.stats) return 0;
-    const stat = pokemon.stats.find((s: any) => s?.stat?.name === statName);
-    return stat?.base_stat || 0;
+  getStat(pokemon: Pokemon | null | undefined, statName: string): number {
+    return getPokemonStat(pokemon?.stats, statName as PokemonStatKey);
   }
 
-  getTotalStats(pokemon: any): number {
-    if (!pokemon || !pokemon.stats) return 0;
-    return pokemon.stats.reduce((sum: number, stat: any) => sum + (stat?.base_stat || 0), 0);
+  getTotalStats(pokemon: Pokemon | null | undefined): number {
+    return getPokemonTotal(pokemon?.stats);
+  }
+
+  /** Stable per-row stat bundle for the Pokédex table. */
+  getTableRowStats(pokemon: Pokemon | null | undefined): PokedexTableRowStats {
+    return getPokedexTableRowStats(pokemon?.stats);
+  }
+
+  trackByPokemonId(_index: number, pokemon: Pokemon): number {
+    return pokemon.id;
   }
 
   getTypeColor(type: string | null | undefined): string {
@@ -597,7 +543,19 @@ export class AppComponent implements OnInit {
   }
 
   toggleSidebar(): void {
-    this.sidebarCollapsed.update(v => !v);
+    if (this.isMobile()) {
+      return;
+    }
+    this.sidebarCollapsed.update((v) => !v);
+  }
+
+  toggleSettingsPanel(): void {
+    this.settingsOpen.update((open) => !open);
+  }
+
+  setTheme(mode: ThemeMode): void {
+    this.themeService.setTheme(mode);
+    this.settingsOpen.set(false);
   }
 
 
@@ -834,9 +792,17 @@ export class AppComponent implements OnInit {
     return this.teams().find((t) => t.id === teamId)?.name ?? '—';
   }
 
+  /** Swaps broken remote avatar URLs to the bundled default image. */
+  onTrainerAvatarError(event: Event): void {
+    const img = event.target as HTMLImageElement;
+    if (img.src.includes(DEFAULT_TRAINER_AVATAR)) {
+      return;
+    }
+    img.src = this.defaultTrainerAvatar;
+  }
+
   getOpponentAvatar(name: string): string {
-    const id = (name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 16) + 1;
-    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/trainers/${id}.png`;
+    return resolveOpponentAvatarUrl(name);
   }
 
   getBattleType(battle: Battle): string {
@@ -857,11 +823,6 @@ export class AppComponent implements OnInit {
     if (days < 7) return `${days}d ago`;
     return date.toLocaleDateString();
   }
-
-  getDefendingTypes(pokemon: Pokemon): string[] {
-    return (pokemon.types || []).map((t) => t.name);
-  }
-
 
  handleTeamCreated(team: Team) {
     this.onTeamCreated(team);

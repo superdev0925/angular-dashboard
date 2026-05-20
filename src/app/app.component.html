@@ -1,46 +1,87 @@
-<div class="app theme-dark">
+<div
+  class="app"
+  [class.theme-dark]="themeService.isDark()"
+  [class.theme-light]="!themeService.isDark()"
+  [class.mobile-rail]="isMobile()">
   <!-- Sidebar -->
-  <aside class="sidebar" [class.collapsed]="sidebarCollapsed()">
+  <aside class="sidebar" [class.collapsed]="sidebarRail()">
     <div class="sidebar-header">
-      <div class="logo" (click)="toggleSidebar()">
+      <div
+        class="logo"
+        (click)="toggleSidebar()"
+        role="button"
+        tabindex="0"
+        (keydown.enter)="toggleSidebar()"
+        [attr.aria-label]="sidebarRail() ? 'Sidebar (icons only)' : 'Collapse sidebar'"
+        [attr.title]="sidebarRail() ? 'Sidebar (icons only)' : 'Collapse sidebar'">
         <span class="logo-icon">⚡</span>
-        <span class="logo-text" *ngIf="!sidebarCollapsed()">Poké<span>Dex</span></span>
+        <span class="logo-text" *ngIf="!sidebarRail()">Poké<span>Dex</span></span>
       </div>
     </div>
     
     <nav class="nav-menu">
       <div class="nav-section">
-        <p class="nav-label" *ngIf="!sidebarCollapsed()">MAIN</p>
-        <a routerLink="/dashboard" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'dashboard'">
+        <p class="nav-label" *ngIf="!sidebarRail()">MAIN</p>
+        <a
+          routerLink="/dashboard"
+          routerLinkActive="active"
+          class="nav-item"
+          [class.active]="activeTab() === 'dashboard'"
+          [attr.title]="sidebarRail() ? 'Dashboard' : null">
           <span class="nav-icon">📊</span>
-          <span *ngIf="!sidebarCollapsed()">Dashboard</span>
+          <span class="nav-text" *ngIf="!sidebarRail()">Dashboard</span>
         </a>
-        <a routerLink="/pokedex" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'pokedex'">
+        <a
+          routerLink="/pokedex"
+          routerLinkActive="active"
+          class="nav-item"
+          [class.active]="activeTab() === 'pokedex'"
+          [attr.title]="sidebarRail() ? 'Pokédex' : null">
           <span class="nav-icon">📋</span>
-          <span *ngIf="!sidebarCollapsed()">Pokédex</span>
+          <span class="nav-text" *ngIf="!sidebarRail()">Pokédex</span>
         </a>
-        <a routerLink="/pokedex-virtual" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'pokedex-virtual'">
+        <a
+          routerLink="/pokedex-virtual"
+          routerLinkActive="active"
+          class="nav-item"
+          [class.active]="activeTab() === 'pokedex-virtual'"
+          [attr.title]="sidebarRail() ? 'Virtual Pokédex' : null">
           <span class="nav-icon">📜</span>
-          <span *ngIf="!sidebarCollapsed()">Virtual Pokédex</span>
+          <span class="nav-text" *ngIf="!sidebarRail()">Virtual Pokédex</span>
         </a>
-        <a routerLink="/teams" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'teams'">
+        <a
+          routerLink="/teams"
+          routerLinkActive="active"
+          class="nav-item"
+          [class.active]="activeTab() === 'teams'"
+          [attr.title]="sidebarRail() ? 'My Teams' : null">
           <span class="nav-icon">👥</span>
-          <span *ngIf="!sidebarCollapsed()">My Teams</span>
+          <span class="nav-text" *ngIf="!sidebarRail()">My Teams</span>
         </a>
-        <a routerLink="/battles" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'battles'">
+        <a
+          routerLink="/battles"
+          routerLinkActive="active"
+          class="nav-item"
+          [class.active]="activeTab() === 'battles'"
+          [attr.title]="sidebarRail() ? 'Battle Log' : null">
           <span class="nav-icon">⚔️</span>
-          <span *ngIf="!sidebarCollapsed()">Battle Log</span>
+          <span class="nav-text" *ngIf="!sidebarRail()">Battle Log</span>
         </a>
-        <a routerLink="/profile" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'profile'">
+        <a
+          routerLink="/profile"
+          routerLinkActive="active"
+          class="nav-item"
+          [class.active]="activeTab() === 'profile'"
+          [attr.title]="sidebarRail() ? 'Profile' : null">
           <span class="nav-icon">👤</span>
-          <span *ngIf="!sidebarCollapsed()">Profile</span>
+          <span class="nav-text" *ngIf="!sidebarRail()">Profile</span>
         </a>
       </div>
     </nav>
     
-    <div class="sidebar-footer" *ngIf="!sidebarCollapsed()">
+    <div class="sidebar-footer" *ngIf="!sidebarRail()">
       <div class="trainer-card">
-        <img [src]="trainerAvatarUrl()" alt="Trainer">
+        <img [src]="trainerAvatarUrl()" alt="Trainer" (error)="onTrainerAvatarError($event)">
         <div class="trainer-meta">
           <h4>{{ currentTrainer()?.name || 'Ash Ketchum' }}</h4>
           <p>{{ currentTrainer()?.rank || 'Champion' }}</p>
@@ -57,7 +98,7 @@
   </aside>
   
   <!-- Main Content -->
-  <main class="main" [class.sidebar-collapsed]="sidebarCollapsed()">
+  <main class="main" [class.sidebar-collapsed]="sidebarRail()">
     <div *ngIf="offlineService.isOffline()" class="offline-banner" role="status">
       <strong>Offline Mode</strong>
       <span>Showing cached Pokédex data.</span>
@@ -67,15 +108,47 @@
     </div>
     <!-- Header -->
     <header class="header header-dark">
-      <div class="header-right header-right-full">
-        <div class="search">
-          <span class="search-icon">🔍</span>
+      <div class="header-right header-right-full" [class.header-right-compact]="activeTab() !== 'pokedex'">
+        <div class="search" *ngIf="activeTab() === 'pokedex'">
           <input
-            type="text"
+            type="search"
+            class="search-input"
             [ngModel]="searchTerm()"
             (ngModelChange)="searchTerm.set($event); onSearchChange()"
-            [placeholder]="getSearchPlaceholder()">
-          <kbd class="search-kbd">⌘ K</kbd>
+            [placeholder]="getSearchPlaceholder()"
+            aria-label="Search Pokédex">
+        </div>
+        <div class="header-settings">
+          <button
+            type="button"
+            class="settings-btn"
+            [class.open]="settingsOpen()"
+            (click)="toggleSettingsPanel()"
+            aria-label="Theme settings"
+            title="Theme settings">
+            ⚙️
+          </button>
+          <div class="settings-panel" *ngIf="settingsOpen()">
+            <p class="settings-panel-title">Appearance</p>
+            <div class="theme-options">
+              <button
+                type="button"
+                class="theme-option"
+                [class.active]="!themeService.isDark()"
+                (click)="setTheme('light')">
+                <span class="theme-icon">☀️</span>
+                Light theme
+              </button>
+              <button
+                type="button"
+                class="theme-option"
+                [class.active]="themeService.isDark()"
+                (click)="setTheme('dark')">
+                <span class="theme-icon">🌙</span>
+                Dark theme
+              </button>
+            </div>
+          </div>
         </div>
         <button type="button" class="notification">
           🔔
@@ -84,7 +157,8 @@
         <img
           class="header-avatar"
           [src]="trainerAvatarUrl()"
-          alt="Profile">
+          alt="Profile"
+          (error)="onTrainerAvatarError($event)">
       </div>
     </header>
     
@@ -107,7 +181,8 @@
         [badgeCount]="currentTrainer()?.badge_count ?? 0"
         (chartPokemonChange)="onDashboardPokemonChange($event)"
         (viewAllBattles)="setActiveTab('battles')"
-        (viewAllProfile)="setActiveTab('profile')">
+        (viewAllProfile)="setActiveTab('profile')"
+        [chartDark]="themeService.isDark()">
       </app-dashboard>
     </div>
     
@@ -153,67 +228,49 @@
       </section>
 
       <div class="pokedex-toolbar glass">
-        <div class="toolbar-type">
-          <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event); onTypeFilterChange()">
-            <option value="">All Types</option>
-            <option *ngFor="let type of allTypes()" [value]="type.name">{{ type.name | titlecase }}</option>
-          </select>
-          <div class="type-icon-row">
-            <span *ngFor="let type of featuredTypeIcons()" class="type-dot" [style.background]="getTypeColor(type.name)" [title]="type.name"></span>
+        <div class="toolbar-row toolbar-row-primary">
+          <div class="toolbar-field toolbar-type">
+            <label for="pokedex-type-filter">Type</label>
+            <select id="pokedex-type-filter" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event); onTypeFilterChange()">
+              <option value="">All types</option>
+              <option *ngFor="let type of allTypes()" [value]="type.name">{{ type.name | titlecase }}</option>
+            </select>
+          </div>
+          <div class="toolbar-field toolbar-search">
+            <label for="pokedex-local-search">Search</label>
+            <input
+              id="pokedex-local-search"
+              type="search"
+              placeholder="Filter list..."
+              [ngModel]="searchTerm()"
+              (ngModelChange)="searchTerm.set($event); onSearchChange()">
+          </div>
+          <div class="toolbar-field toolbar-page-size">
+            <label for="pokedex-page-size">Per page</label>
+            <select id="pokedex-page-size" [ngModel]="itemsPerPage()" (ngModelChange)="changeItemsPerPage($event)">
+              <option [value]="10">10</option>
+              <option [value]="25">25</option>
+              <option [value]="50">50</option>
+            </select>
+          </div>
+          <div class="toolbar-results">
+            {{ showingFrom() }}–{{ showingTo() }} of {{ totalResults() }}
+          </div>
+          <button type="button" class="toolbar-add-team" *ngIf="selectedRowIds().size" (click)="addSelectedToTeam()">
+            + Team ({{ selectedRowIds().size }})
+          </button>
+        </div>
+        <div class="toolbar-row toolbar-row-secondary">
+          <div class="toolbar-field toolbar-range">
+            <label>Total stats {{ minStats() }}–{{ maxStats() }}</label>
+            <div class="range-inputs">
+              <input type="range" min="0" max="800" [ngModel]="minStats()" (ngModelChange)="minStats.set(+$event); currentPage.set(1)">
+              <input type="range" min="0" max="800" [ngModel]="maxStats()" (ngModelChange)="maxStats.set(+$event); currentPage.set(1)">
+            </div>
           </div>
         </div>
-        <div class="toolbar-search">
-          <span>🔍</span>
-          <input type="text" placeholder="Search Pokémon..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); onSearchChange()">
-        </div>
-        <div class="toolbar-sort">
-          <label>Sort by</label>
-          <select [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)">
-            <option value="id"># ID</option>
-            <option value="name">Name</option>
-            <option value="hp">HP</option>
-            <option value="attack">ATK</option>
-            <option value="defense">DEF</option>
-            <option value="special-attack">SP. ATK</option>
-            <option value="special-defense">SP. DEF</option>
-            <option value="speed">SPEED</option>
-            <option value="total">TOTAL</option>
-          </select>
-        </div>
-        <div class="toolbar-sort">
-          <label>Order</label>
-          <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)">
-            <option value="asc">Ascending ↑</option>
-            <option value="desc">Descending ↓</option>
-          </select>
-        </div>
-        <div class="toolbar-sort">
-          <label>Items per page</label>
-          <select [ngModel]="itemsPerPage()" (ngModelChange)="changeItemsPerPage($event)">
-            <option [value]="10">10</option>
-            <option [value]="25">25</option>
-            <option [value]="50">50</option>
-          </select>
-        </div>
-        <div class="toolbar-stat-range">
-          <label>Min {{ minStats() }}</label>
-          <input type="range" min="0" max="800" [ngModel]="minStats()" (ngModelChange)="minStats.set(+$event); currentPage.set(1)">
-          <label>Max {{ maxStats() }}</label>
-          <input type="range" min="0" max="800" [ngModel]="maxStats()" (ngModelChange)="maxStats.set(+$event); currentPage.set(1)">
-        </div>
-        <div class="toolbar-highlight">
-          <label>Highlight</label>
-          <select [ngModel]="typeHighlightFilter()" (ngModelChange)="typeHighlightFilter.set($event)">
-            <option value="">Off</option>
-            <option *ngFor="let type of allTypes()" [value]="type.name">{{ type.name | titlecase }}</option>
-          </select>
-        </div>
-        <div class="toolbar-results">Showing {{ showingFrom() }} - {{ showingTo() }} of {{ totalResults() }} Pokémon</div>
-        <button type="button" class="toolbar-add-team" *ngIf="selectedRowIds().size" (click)="addSelectedToTeam()">+ Team ({{ selectedRowIds().size }})</button>
       </div>
 
-      <div class="pokedex-layout">
-        <div class="pokedex-main">
       <!-- Loading -->
       <div *ngIf="loading()" class="loading loading-with-skeleton">
         <div class="pokeball" aria-hidden="true"></div>
@@ -237,67 +294,119 @@
         cdkDropList
         (cdkDropListDropped)="onPokemonDroppedToTeam($event)">
         <span class="drop-icon">⇅</span>
-        <p>Drag a Pokémon row here to queue it for the Team Builder (max 6).</p>
+        <p>KICK a Pokémon row here to queue it for the Team Builder (max 6).</p>
         <small *ngIf="modalPreselectedIds().length">Queued IDs: {{ modalPreselectedIds().join(', ') }}</small>
       </div>
 
       <!-- Pokémon Table -->
       <div *ngIf="!loading() && totalResults() > 0" class="pokedex-table glass">
-        <table>
-          <thead>
-            <tr>
-              <th></th>
-              <th (click)="onSortChange('id')"># <span *ngIf="sortBy() === 'id'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
-              <th (click)="onSortChange('name')">Pokémon <span *ngIf="sortBy() === 'name'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
-              <th>Types</th>
-              <th (click)="onSortChange('hp')">HP <span *ngIf="sortBy() === 'hp'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
-              <th (click)="onSortChange('attack')">ATK <span *ngIf="sortBy() === 'attack'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
-              <th (click)="onSortChange('defense')">DEF <span *ngIf="sortBy() === 'defense'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
-              <th (click)="onSortChange('special-attack')">SP. ATK <span *ngIf="sortBy() === 'special-attack'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
-              <th (click)="onSortChange('special-defense')">SP. DEF <span *ngIf="sortBy() === 'special-defense'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
-              <th (click)="onSortChange('speed')">SPEED <span *ngIf="sortBy() === 'speed'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
-              <th (click)="onSortChange('total')">TOTAL <span *ngIf="sortBy() === 'total'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
-              <th class="view-col-header">VIEW</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              *ngFor="let pokemon of paginatedPokemon(); let i = index"
-              class="stagger-row"
-              cdkDrag
-              cdkDragLockAxis="y"
-              [cdkDragData]="pokemon"
-              [style.animation-delay.ms]="i * 45"
-              (click)="selectPokemon(pokemon)"
-              [class.selected-row]="isRowSelected(pokemon.id)"
-              [appTypeHighlight]="typeHighlightFilter()"
-              [defendingTypes]="getDefendingTypes(pokemon)">
-              <td (click)="toggleRowSelection(pokemon.id, $event)">
-                <input type="checkbox" [checked]="isRowSelected(pokemon.id)" (click)="toggleRowSelection(pokemon.id, $event)">
-              </td>
-              <td class="pokemon-id">#{{ pokemon?.id || 0 }}</td>
-              <td class="pokemon-name">
-                <img [src]="getPokemonSprite(pokemon)" [alt]="pokemon?.name || 'Pokemon'">
-                <span>{{ pokemon?.name || 'Unknown' | titlecase }}</span>
-              </td>
-              <td class="pokemon-types">
-                <span *ngFor="let type of pokemon?.types || []" class="type-badge" [style.backgroundColor]="getTypeColor(type?.name)">
-                  {{ type?.name || 'unknown' }}
-                </span>
-              </td>
-              <td>{{ getStat(pokemon, 'hp') }}</td>
-              <td>{{ getStat(pokemon, 'attack') }}</td>
-              <td>{{ getStat(pokemon, 'defense') }}</td>
-              <td>{{ getStat(pokemon, 'special-attack') }}</td>
-              <td>{{ getStat(pokemon, 'special-defense') }}</td>
-              <td>{{ getStat(pokemon, 'speed') }}</td>
-              <td class="total-stat">{{ getTotalStats(pokemon) }}</td>
-              <td class="view-cell" (click)="$event.stopPropagation()">
-                <button type="button" class="view-eye-btn" (click)="selectPokemon(pokemon)" title="View details">👁</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="pokedex-table-scroll">
+          <table class="pokedex-data-table">
+            <colgroup>
+              <col class="col-select" />
+              <col class="col-drag" />
+              <col class="col-id" />
+              <col class="col-name" />
+              <col class="col-types" />
+              <col class="col-stat" span="5" />
+              <col class="col-total" />
+              <col class="col-view" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="col-select" scope="col"></th>
+                <th class="col-drag" scope="col" aria-label="Reorder"></th>
+                <th class="col-id" scope="col" (click)="onSortChange('id')">
+                  # <span *ngIf="sortBy() === 'id'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span>
+                </th>
+                <th class="col-name" scope="col" (click)="onSortChange('name')">
+                  Pokémon <span *ngIf="sortBy() === 'name'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span>
+                </th>
+                <th class="col-types" scope="col">Types</th>
+                <th class="col-stat" scope="col" (click)="onSortChange('hp')">
+                  HP <span *ngIf="sortBy() === 'hp'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span>
+                </th>
+                <th class="col-stat" scope="col" (click)="onSortChange('attack')">
+                  ATK <span *ngIf="sortBy() === 'attack'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span>
+                </th>
+                <th class="col-stat" scope="col" (click)="onSortChange('defense')">
+                  DEF <span *ngIf="sortBy() === 'defense'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span>
+                </th>
+                <th class="col-stat" scope="col" (click)="onSortChange('special-attack')">
+                  SP. ATK <span *ngIf="sortBy() === 'special-attack'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span>
+                </th>
+                <th class="col-stat" scope="col" (click)="onSortChange('special-defense')">
+                  SP. DEF <span *ngIf="sortBy() === 'special-defense'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span>
+                </th>
+                <th class="col-total" scope="col" (click)="onSortChange('total')">
+                  TOTAL <span *ngIf="sortBy() === 'total'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span>
+                </th>
+                <th class="col-view" scope="col">View</th>
+              </tr>
+            </thead>
+            <tbody>
+              <ng-container *ngFor="let pokemon of paginatedPokemon(); let i = index; trackBy: trackByPokemonId">
+                <tr
+                  *ngIf="getTableRowStats(pokemon) as s"
+                  class="stagger-row"
+                  [style.animation-delay.ms]="i * 45"
+                  (click)="selectPokemon(pokemon)"
+                  [class.selected-row]="isRowSelected(pokemon.id)">
+                  <td class="col-select" (click)="toggleRowSelection(pokemon.id, $event)">
+                    <label class="select-box" (click)="$event.stopPropagation()">
+                      <input
+                        type="checkbox"
+                        class="row-select"
+                        [checked]="isRowSelected(pokemon.id)"
+                        (click)="toggleRowSelection(pokemon.id, $event)">
+                    </label>
+                  </td>
+                  <td
+                    class="col-drag"
+                    cdkDrag
+                    cdkDragLockAxis="y"
+                    [cdkDragData]="pokemon"
+                    (click)="$event.stopPropagation()">
+                    <span class="drag-handle" title="Drag to team queue">⋮⋮</span>
+                  </td>
+                  <td class="col-id">#{{ pokemon.id }}</td>
+                  <td class="col-name">
+                    <div class="col-name-cell">
+                      <img [src]="getPokemonSprite(pokemon)" [alt]="pokemon.name" width="36" height="36">
+                      <span>{{ pokemon.name | titlecase }}</span>
+                    </div>
+                  </td>
+                  <td class="col-types">
+                    <span
+                      *ngFor="let type of pokemon.types"
+                      class="type-badge"
+                      [style.backgroundColor]="getTypeColor(type.name)">
+                      {{ type.name }}
+                    </span>
+                  </td>
+                  <td class="col-stat num">{{ s.hp }}</td>
+                  <td class="col-stat num">{{ s.attack }}</td>
+                  <td class="col-stat num">{{ s.defense }}</td>
+                  <td class="col-stat num">{{ s.specialAttack }}</td>
+                  <td class="col-stat num">{{ s.specialDefense }}</td>
+                  <td class="col-total num">
+                    <strong class="total-stat-value">{{ s.total }}</strong>
+                  </td>
+                  <td class="col-view" (click)="$event.stopPropagation()">
+                    <button
+                      type="button"
+                      class="view-eye-btn"
+                      (click)="selectPokemon(pokemon); $event.stopPropagation()"
+                      title="View details"
+                      [attr.aria-label]="'View ' + pokemon.name">
+                      View
+                    </button>
+                  </td>
+                </tr>
+              </ng-container>
+            </tbody>
+          </table>
+        </div>
       </div>
       
       <div *ngIf="!loading() && totalPages() > 1" class="pagination pokedex-pagination">
@@ -309,47 +418,6 @@
           </ng-container>
         </div>
         <button type="button" (click)="nextPage()" [disabled]="currentPage() === totalPages()">→</button>
-      </div>
-        </div>
-
-        <aside class="pokedex-charts">
-          <div class="chart-panel glass">
-            <div class="chart-panel-header">
-              <h3>Total Stats Distribution</h3>
-              <select disabled><option>All Types</option></select>
-            </div>
-            <div class="chart-panel-body doughnut-wrap">
-              <app-doughnut-chart [teamTypes]="statRangeDistribution()" [dark]="true" [animate]="true"></app-doughnut-chart>
-              <div class="doughnut-center">
-                <strong>{{ pokedexCatalogTotal() }}</strong>
-                <span>Pokémon</span>
-              </div>
-            </div>
-            <ul class="chart-legend">
-              <li *ngFor="let seg of statRangeDistribution()">
-                <i [style.background]="seg.color"></i>
-                {{ seg.name }} · {{ seg.count }}
-              </li>
-            </ul>
-          </div>
-          <div class="chart-panel glass">
-            <h3>Type Breakdown</h3>
-            <div class="chart-panel-body doughnut-wrap">
-              <app-doughnut-chart [teamTypes]="typeBreakdownChart()" [dark]="true" [animate]="true"></app-doughnut-chart>
-              <div class="doughnut-center">
-                <strong>{{ pokedexCatalogTotal() }}</strong>
-                <span>Pokémon</span>
-              </div>
-            </div>
-            <ul class="chart-legend">
-              <li *ngFor="let seg of typeBreakdownChart()">
-                <i [style.background]="seg.color"></i>
-                {{ seg.name }} · {{ seg.count }}
-              </li>
-            </ul>
-            <p class="chart-footer">Total Types: {{ allTypes().length }}</p>
-          </div>
-        </aside>
       </div>
     </div>
     
@@ -415,7 +483,7 @@
         <div class="page-hero-content">
           <span class="eyebrow">BATTLE LOG</span>
           <h1>Record. <em>Review.</em> Improve.</h1>
-          <p>Log battles, filter results, and watch the live feed from your mock GraphQL server.</p>
+          <p>Log battles, filter results, and review your match history.</p>
         </div>
       </section>
       <div class="battles-container">
@@ -446,7 +514,7 @@
           <thead>
             <tr>
               <th>Result</th>
-              <th>Opponent</th>
+              <th class="col-opponent">Opponent</th>
               <th>Team</th>
               <th>Type</th>
               <th>Date</th>
@@ -460,7 +528,10 @@
                 </span>
               </td>
               <td class="opponent-cell">
-                <img [src]="getOpponentAvatar(battle.opponent_name)" alt="">
+                <img
+                  [src]="getOpponentAvatar(battle.opponent_name)"
+                  [alt]="battle.opponent_name"
+                  (error)="onTrainerAvatarError($event)">
                 <span>{{ battle.opponent_name }}</span>
               </td>
               <td>{{ getTeamName(battle.team_id) }}</td>
@@ -469,19 +540,6 @@
             </tr>
           </tbody>
         </table>
-      </div>
-
-      <h3 class="section-title">Live Battle Feed</h3>
-      <p class="feed-note">
-        Polled once every 5 seconds via RxJS <code>interval(5000)</code> + <code>switchMap</code>
-        (no WebSocket on json-graphql-server).
-        <span *ngIf="lastBattleFeedPollAt()">Last check: {{ lastBattleFeedPollAt() | date:'mediumTime' }}</span>
-      </p>
-      <div class="battle-log glass">
-        <div *ngFor="let log of battleLogs()" class="log-entry" [class]="log.severity">
-          <span class="log-time">{{ log.timestamp | date:'short' }}</span>
-          <span class="log-message">{{ log.message }}</span>
-        </div>
       </div>
       </div>
     </div>
@@ -499,7 +557,7 @@
       <div class="profile-container">
       <div class="profile-hero" *ngIf="currentTrainer() as trainer">
         <div class="profile-hero-main">
-          <img class="profile-avatar-lg" [src]="trainerAvatarUrl()" alt="Trainer">
+          <img class="profile-avatar-lg" [src]="trainerAvatarUrl()" alt="Trainer" (error)="onTrainerAvatarError($event)">
           <div class="profile-hero-info">
             <h2>{{ profileName() || trainer.name }}</h2>
             <p class="rank-line">{{ profileRank() || trainer.rank }}</p>

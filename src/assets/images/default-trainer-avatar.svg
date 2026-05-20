@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Default trainer avatar">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4c1d95"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="64" fill="url(#bg)"/>
+  <circle cx="64" cy="48" r="22" fill="#cbd5e1"/>
+  <path fill="#cbd5e1" d="M24 108c8-22 28-34 40-34s32 12 40 34c-12 8-28 12-40 12s-28-4-40-12z"/>
+  <circle cx="64" cy="64" r="58" fill="none" stroke="#7c3aed" stroke-width="3" opacity="0.45"/>
+</svg>

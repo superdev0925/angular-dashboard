@@ -18,6 +18,8 @@ import {
 
 Chart.register(...registerables);
 
+export type BattleChartPeriod = 'monthly' | 'weekly';
+
 @Component({
   selector: 'app-line-chart',
   standalone: true,
@@ -69,6 +71,7 @@ Chart.register(...registerables);
 })
 export class LineChartComponent implements AfterViewInit, OnDestroy {
   battles = input<Battle[]>([]);
+  period = input<BattleChartPeriod>('monthly');
   animate = input(false);
   @ViewChild('lineCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
 
@@ -79,6 +82,7 @@ export class LineChartComponent implements AfterViewInit, OnDestroy {
     effect(() => {
       // Track inputs reactively and update chart after view init.
       this.battles();
+      this.period();
       this.animate();
       if (!this.viewReady) return;
       queueMicrotask(() => this.updateChart());
@@ -95,29 +99,68 @@ export class LineChartComponent implements AfterViewInit, OnDestroy {
     this.chart = null;
   }
 
-  private getMonthlyData(): { months: string[]; wins: number[]; losses: number[] } {
-    const monthlyData = new Map<string, { wins: number; losses: number }>();
+  private getChartData(): { labels: string[]; wins: number[]; losses: number[] } {
+    return this.period() === 'weekly' ? this.getWeeklyData() : this.getMonthlyData();
+  }
+
+  private aggregateBattles(
+    bucketKey: (dateStr: string) => string,
+    formatLabel: (key: string) => string
+  ): { labels: string[]; wins: number[]; losses: number[] } {
+    const buckets = new Map<string, { wins: number; losses: number }>();
 
     this.battles()?.forEach((battle) => {
       if (!battle?.date) return;
-      const month = battle.date.substring(0, 7);
-      const current = monthlyData.get(month) || { wins: 0, losses: 0 };
+      const key = bucketKey(battle.date);
+      const current = buckets.get(key) || { wins: 0, losses: 0 };
       if (battle.result === 'win') current.wins++;
       else if (battle.result === 'loss') current.losses++;
-      monthlyData.set(month, current);
+      buckets.set(key, current);
     });
 
-    const sortedMonths = Array.from(monthlyData.keys()).sort();
-    if (sortedMonths.length === 0) return { months: [], wins: [], losses: [] };
+    const sortedKeys = Array.from(buckets.keys()).sort();
+    if (sortedKeys.length === 0) return { labels: [], wins: [], losses: [] };
 
     return {
-      months: sortedMonths.map((m) => {
-        const d = new Date(m + '-01');
-        return d.toLocaleString('default', { month: 'short' });
-      }),
-      wins: sortedMonths.map((m) => monthlyData.get(m)?.wins || 0),
-      losses: sortedMonths.map((m) => monthlyData.get(m)?.losses || 0),
+      labels: sortedKeys.map(formatLabel),
+      wins: sortedKeys.map((k) => buckets.get(k)?.wins || 0),
+      losses: sortedKeys.map((k) => buckets.get(k)?.losses || 0),
     };
+  }
+
+  private getMonthlyData(): { labels: string[]; wins: number[]; losses: number[] } {
+    return this.aggregateBattles(
+      (dateStr) => dateStr.substring(0, 7),
+      (monthKey) => {
+        const d = new Date(monthKey + '-01');
+        return d.toLocaleString('default', { month: 'short' });
+      }
+    );
+  }
+
+  private getWeeklyData(): { labels: string[]; wins: number[]; losses: number[] } {
+    return this.aggregateBattles(
+      (dateStr) => this.weekBucket(dateStr),
+      (weekKey) => this.formatWeekLabel(weekKey)
+    );
+  }
+
+  /** Monday of the battle's week (YYYY-MM-DD). */
+  private weekBucket(dateStr: string): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    const day = date.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    const monday = new Date(y, m - 1, d + mondayOffset);
+    const yy = monday.getFullYear();
+    const mm = String(monday.getMonth() + 1).padStart(2, '0');
+    const dd = String(monday.getDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+  }
+
+  private formatWeekLabel(weekKey: string): string {
+    const [y, m, d] = weekKey.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('default', { month: 'short', day: 'numeric' });
   }
 
   private createChart(): void {
@@ -126,12 +169,12 @@ export class LineChartComponent implements AfterViewInit, OnDestroy {
     if (!ctx) return;
 
     this.chart?.destroy();
-    const { months, wins, losses } = this.getMonthlyData();
+    const { labels, wins, losses } = this.getChartData();
 
     const config: ChartConfiguration<'line', number[], string> = {
       type: 'line',
       data: {
-        labels: months,
+        labels,
         datasets: [
           {
             label: 'Wins',
@@ -199,8 +242,8 @@ export class LineChartComponent implements AfterViewInit, OnDestroy {
       this.createChart();
       return;
     }
-    const { months, wins, losses } = this.getMonthlyData();
-    this.chart.data.labels = months;
+    const { labels, wins, losses } = this.getChartData();
+    this.chart.data.labels = labels;
     this.chart.data.datasets[0].data = wins;
     this.chart.data.datasets[1].data = losses;
     this.chart.update(this.animate() ? 'active' : 'none');

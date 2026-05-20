@@ -19,7 +19,9 @@ export const GET_POKEMON = gql`
       }
       pokemon_v2_pokemonstats {
         base_stat
+        stat_id
         pokemon_v2_stat {
+          id
           name
         }
       }
@@ -49,7 +51,9 @@ export const GET_POKEMON_BY_ID = gql`
       }
       pokemon_v2_pokemonstats {
         base_stat
+        stat_id
         pokemon_v2_stat {
+          id
           name
         }
       }

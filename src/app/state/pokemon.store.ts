@@ -10,6 +10,12 @@ import {
   GET_EVOLUTION_CHAIN,
 } from '../core/graphql/pokemon.queries';
 import { PokemonCacheService } from '../services/pokemon-cache.service';
+import {
+  POKEMON_STAT_IDS,
+  PokemonStatRow,
+  canonicalizePokemonStats,
+  normalizeStatKey,
+} from '../utils/pokemon-stats.util';
 
 export interface Pokemon {
   id: number;
@@ -18,7 +24,7 @@ export interface Pokemon {
   weight: number;
   base_experience: number;
   types: { id: number; name: string }[];
-  stats: { base_stat: number; stat: { name: string } }[];
+  stats: PokemonStatRow[];
   abilities?: any[];
   moves?: string[];
   evolutionChain?: string[];
@@ -125,7 +131,12 @@ export class PokemonStore {
   private fetchPokemonFromCache(limit: number, offset: number): Observable<Pokemon[]> {
     return from(this.pokemonCache.loadPokemon()).pipe(
       map((all) => {
-        const pokemon = (all ?? []).slice(offset, offset + limit);
+        const pokemon = (all ?? [])
+          .slice(offset, offset + limit)
+          .map((p) => ({
+            ...p,
+            stats: canonicalizePokemonStats(p.stats),
+          }));
         this.updateState({
           pokemon,
           pagination: { limit, offset, total: pokemon.length },
@@ -277,7 +288,7 @@ export class PokemonStore {
         weight: pokemon?.weight || 0,
         base_experience: pokemon?.base_experience || 0,
         types: pokemon?.pokemon_v2_pokemontypes?.map((t: any) => t?.pokemon_v2_type || { id: 0, name: 'unknown' }) || [],
-        stats: this.normalizeStats(pokemon?.pokemon_v2_pokemonstats),
+        stats: canonicalizePokemonStats(this.normalizeStats(pokemon?.pokemon_v2_pokemonstats)),
         sprites: this.resolveSpriteUrl(id, pokemon?.pokemon_v2_pokemonsprites?.[0]?.sprites),
       };
     });
@@ -308,7 +319,7 @@ export class PokemonStore {
       weight: data.weight,
       base_experience: data.base_experience,
       types: data.pokemon_v2_pokemontypes?.map((t: any) => t.pokemon_v2_type) || [],
-      stats: this.normalizeStats(data.pokemon_v2_pokemonstats),
+      stats: canonicalizePokemonStats(this.normalizeStats(data.pokemon_v2_pokemonstats)),
       abilities: abilities,
       moves,
       evolutionChain,
@@ -349,17 +360,24 @@ export class PokemonStore {
     }
   }
 
-  /** Maps PokéAPI stat rows to `{ base_stat, stat: { name } }` for UI and selectors. */
-  private normalizeStats(raw: any[] | undefined): { base_stat: number; stat: { name: string } }[] {
+  /** Maps PokéAPI stat rows using stat_id so SP. ATK / SP. DEF never swap. */
+  private normalizeStats(raw: any[] | undefined): PokemonStatRow[] {
     if (!raw?.length) {
       return [];
     }
-    return raw.map((s) => ({
-      base_stat: s?.base_stat ?? 0,
-      stat: {
-        name: s?.stat?.name ?? s?.pokemon_v2_stat?.name ?? ''
-      }
-    }));
+    return raw.map((s) => {
+      const statId = s?.stat_id ?? s?.pokemon_v2_stat?.id;
+      const id = statId != null ? Number(statId) : undefined;
+      const rawName = s?.pokemon_v2_stat?.name ?? s?.stat?.name ?? '';
+      const name =
+        (id != null && POKEMON_STAT_IDS[id]) ||
+        normalizeStatKey(String(rawName)) ||
+        String(rawName).toLowerCase().replace(/_/g, '-');
+      return {
+        base_stat: s?.base_stat ?? 0,
+        stat: { name, id },
+      };
+    });
   }
 
   private setLoading(loading: boolean): void {

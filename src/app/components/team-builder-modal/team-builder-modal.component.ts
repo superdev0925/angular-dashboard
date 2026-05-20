@@ -101,89 +101,153 @@ interface PokemonData {
     </div>
   `,
   styles: [`
+    :host {
+      --modal-bg: #1e293b;
+      --modal-surface: rgba(30, 41, 59, 0.92);
+      --modal-border: rgba(148, 163, 184, 0.18);
+      --modal-text: #f1f5f9;
+      --modal-muted: #94a3b8;
+      --modal-accent: #7c3aed;
+      --modal-accent-hover: #6d28d9;
+    }
+
     .modal-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
+      inset: 0;
+      background: rgba(2, 6, 23, 0.72);
+      backdrop-filter: blur(6px);
       z-index: 1000;
       display: flex;
       align-items: center;
       justify-content: center;
       opacity: 0;
       visibility: hidden;
-      transition: all 0.3s;
-      
+      transition: opacity 0.3s, visibility 0.3s;
+
       &.show {
         opacity: 1;
         visibility: visible;
       }
     }
-    
+
     .modal-container {
-      background: white;
+      background: linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+      border: 1px solid var(--modal-border);
       border-radius: 16px;
       width: 90%;
       max-width: 640px;
-      max-height: 80vh;
+      max-height: 85vh;
       overflow-y: auto;
-      transform: translateY(-50px);
-      transition: transform 0.3s;
-      
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(124, 58, 237, 0.12);
+      color: var(--modal-text);
+      transform: translateY(-24px);
+      transition: transform 0.35s ease;
+
       &.slide-up {
         transform: translateY(0);
       }
     }
-    
+
     .modal-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 12px;
-      padding: 16px 20px;
-      border-bottom: 1px solid #e5e7eb;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--modal-border);
+      background: rgba(15, 23, 42, 0.5);
 
-      h2 { flex: 1; font-size: 1.25rem; margin: 0; }
+      h2 {
+        flex: 1;
+        font-size: 1.25rem;
+        margin: 0;
+        font-weight: 600;
+        color: var(--modal-text);
+      }
 
-      .back-btn, .close-btn {
-        background: none;
-        border: none;
-        font-size: 20px;
+      .back-btn,
+      .close-btn {
+        background: rgba(148, 163, 184, 0.1);
+        border: 1px solid var(--modal-border);
+        border-radius: 8px;
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
         cursor: pointer;
-        color: #6b7280;
+        color: var(--modal-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s, color 0.2s;
+
+        &:hover {
+          background: rgba(124, 58, 237, 0.2);
+          color: var(--modal-text);
+        }
       }
     }
-    
+
     .modal-body {
-      padding: 20px;
+      padding: 22px;
     }
-    
+
     .form-group {
       margin-bottom: 20px;
-      
+
       label {
         display: block;
         margin-bottom: 8px;
         font-weight: 500;
+        font-size: 13px;
+        color: var(--modal-muted);
       }
-      
+
+      .required {
+        color: #f472b6;
+      }
+
       input,
       select {
         width: 100%;
-        padding: 8px 12px;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        background: white;
+        padding: 10px 14px;
+        border: 1px solid var(--modal-border);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.8);
+        color: var(--modal-text);
+        font-size: 14px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+
+        &::placeholder {
+          color: #64748b;
+        }
+
+        &:focus {
+          outline: none;
+          border-color: rgba(124, 58, 237, 0.6);
+          box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+        }
+      }
+
+      select {
+        cursor: pointer;
+
+        option {
+          background: #1e293b;
+          color: var(--modal-text);
+        }
       }
 
       select:disabled {
-        opacity: 0.6;
+        opacity: 0.5;
         cursor: not-allowed;
       }
+
+      .error-messages small {
+        color: #f87171;
+        font-size: 12px;
+      }
     }
-    
+
     .slot-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -191,7 +255,7 @@ interface PokemonData {
     }
 
     .slot-card {
-      border: 2px dashed #d1d5db;
+      border: 2px dashed rgba(148, 163, 184, 0.35);
       border-radius: 12px;
       min-height: 120px;
       display: flex;
@@ -202,31 +266,53 @@ interface PokemonData {
       cursor: pointer;
       padding: 12px;
       position: relative;
-      background: #f9fafb;
+      background: rgba(15, 23, 42, 0.6);
       font-size: 12px;
-      color: #6b7280;
+      color: var(--modal-muted);
+      transition: border-color 0.2s, background 0.2s;
+
+      &:hover {
+        border-color: rgba(167, 139, 250, 0.5);
+        background: rgba(124, 58, 237, 0.08);
+      }
 
       &.filled {
         border-style: solid;
-        border-color: #e5e7eb;
-        background: #fff;
+        border-color: rgba(124, 58, 237, 0.45);
+        background: rgba(30, 41, 59, 0.9);
+        color: var(--modal-text);
       }
 
-      img { width: 56px; height: 56px; image-rendering: pixelated; }
+      img {
+        width: 56px;
+        height: 56px;
+        image-rendering: pixelated;
+      }
 
-      .plus { font-size: 28px; color: #7c3aed; font-weight: 300; }
+      .plus {
+        font-size: 28px;
+        color: #a78bfa;
+        font-weight: 300;
+      }
 
       .remove-slot {
         position: absolute;
         top: 6px;
         right: 6px;
-        border: none;
-        background: #f3f4f6;
+        border: 1px solid var(--modal-border);
+        background: rgba(30, 41, 59, 0.95);
+        color: var(--modal-muted);
         border-radius: 50%;
         width: 22px;
         height: 22px;
         cursor: pointer;
         font-size: 12px;
+        line-height: 1;
+
+        &:hover {
+          color: #f87171;
+          border-color: rgba(248, 113, 113, 0.4);
+        }
       }
     }
 
@@ -241,45 +327,61 @@ interface PokemonData {
     .picker-fallback {
       margin-top: 12px;
     }
-    
+
     .form-actions {
       display: flex;
       justify-content: flex-end;
       gap: 12px;
       margin-top: 24px;
-      padding-top: 16px;
-      border-top: 1px solid #e5e7eb;
+      padding-top: 18px;
+      border-top: 1px solid var(--modal-border);
 
       .btn-cancel {
         padding: 10px 20px;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--modal-border);
         border-radius: 10px;
-        background: white;
+        background: rgba(15, 23, 42, 0.8);
+        color: var(--modal-muted);
         cursor: pointer;
         font-weight: 500;
+        transition: background 0.2s, color 0.2s;
+
+        &:hover {
+          background: rgba(51, 65, 85, 0.8);
+          color: var(--modal-text);
+        }
       }
 
       .btn-create {
         padding: 10px 24px;
         border: none;
         border-radius: 10px;
-        background: #7c3aed;
-        color: white;
+        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+        color: #fff;
         font-weight: 600;
         cursor: pointer;
+        box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+        transition: transform 0.15s, box-shadow 0.2s;
+
+        &:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45);
+        }
 
         &:disabled {
-          opacity: 0.5;
+          opacity: 0.45;
           cursor: not-allowed;
+          box-shadow: none;
         }
       }
     }
-    
+
     .type-badge {
       font-size: 10px;
       padding: 2px 6px;
       border-radius: 10px;
-      background: #ddd;
+      background: rgba(124, 58, 237, 0.35);
+      color: #e9d5ff;
     }
   `]
 })

@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, model, output, inject, ChangeDetectionStrategy, DestroyRef, effect } from '@angular/core';
+import { Component, OnInit, signal, output, inject, ChangeDetectionStrategy, DestroyRef, effect, computed } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
@@ -24,7 +24,7 @@ interface PokemonOption {
   imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, DragDropModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="team-builder-container theme-dark-page">
+    <div class="team-builder-container">
       <div class="team-builder-header">
         <a routerLink="/teams" class="back-link">← Back to Teams</a>
         <h2>Team Builder</h2>
@@ -49,36 +49,24 @@ interface PokemonOption {
           </div>
         </div>
         
-        <!-- Pokémon Search with Autocomplete -->
+        <!-- Add Pokémon via select -->
         <div class="form-group">
           <label>Add Pokémon <span class="required">*</span> ({{ selectedPokemon().length }}/6)</label>
-          <div class="search-container">
-            <input 
-              type="text" 
-              [ngModel]="searchTerm()"
-              (ngModelChange)="onSearchChange($event)"
-              [ngModelOptions]="{standalone: true}"
-              placeholder="Search Pokémon by name..."
-              class="search-input"
-            >
-            <div class="autocomplete-dropdown" *ngIf="searchResults().length > 0 && searchTerm()">
-              <div 
-                *ngFor="let pokemon of searchResults()" 
-                class="autocomplete-item"
-                (click)="addPokemon(pokemon)"
-              >
-                <img [src]="pokemon.sprite" [alt]="pokemon.name" class="autocomplete-sprite">
-                <div class="autocomplete-info">
-                  <strong>{{ pokemon.name | titlecase }}</strong>
-                  <div class="pokemon-types">
-                    <span *ngFor="let type of pokemon.types" [class]="'type-badge type-' + type">
-                      {{ type }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <select
+            class="pokemon-select"
+            [ngModel]="pickerPokemonId()"
+            (ngModelChange)="onPokemonSelect($event)"
+            [ngModelOptions]="{standalone: true}"
+            [disabled]="selectedPokemon().length >= 6 || availablePokemonOptions().length === 0"
+          >
+            <option [ngValue]="''">
+              {{ catalogLoading() ? 'Loading Pokémon...' : 'Choose a Pokémon to add...' }}
+            </option>
+            <option *ngFor="let pokemon of availablePokemonOptions()" [ngValue]="pokemon.id">
+              #{{ pokemon.id }} — {{ pokemon.name | titlecase }}{{ pokemon.types.length ? ' (' + pokemon.types.join(', ') + ')' : '' }}
+            </option>
+          </select>
+          <p class="picker-hint" *ngIf="selectedPokemon().length >= 6">Team is full (6/6). Remove a Pokémon to add another.</p>
           
           <!-- Selected Pokémon Chips (drag to reorder — Bonus 2) -->
           <p class="drag-hint">Drag chips to reorder your squad.</p>
@@ -225,33 +213,34 @@ interface PokemonOption {
       width: 100%;
     }
 
-    .team-builder-container.theme-dark-page {
+    .team-builder-container {
       max-width: 1200px;
       margin: 0 auto;
       padding: 28px;
-      background: rgba(30, 41, 59, 0.55);
-      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
       border-radius: 16px;
       backdrop-filter: blur(12px);
-      color: #e2e8f0;
+      color: var(--text-body);
+      box-shadow: var(--shadow);
     }
     
     .team-builder-header {
       margin-bottom: 32px;
       
       .back-link {
-        color: #a78bfa;
+        color: var(--accent);
         text-decoration: none;
         font-size: 14px;
       }
       
       h2 {
-        color: #f1f5f9;
+        color: var(--text-heading);
         margin: 12px 0 8px;
       }
       
       p {
-        color: #94a3b8;
+        color: var(--text-muted);
       }
     }
     
@@ -263,7 +252,7 @@ interface PokemonOption {
           display: block;
           margin-bottom: 8px;
           font-weight: 500;
-          color: #94a3b8;
+          color: var(--text-muted);
           
           .required {
             color: #EF4444;
@@ -273,11 +262,11 @@ interface PokemonOption {
         input, select {
           width: 100%;
           padding: 10px 14px;
-          border: 1px solid rgba(148, 163, 184, 0.2);
+          border: 1px solid var(--surface-border);
           border-radius: 10px;
           font-size: 14px;
-          background: rgba(15, 23, 42, 0.8);
-          color: #e2e8f0;
+          background: var(--surface-deep);
+          color: var(--text-body);
           transition: all 0.3s;
           
           &:focus {
@@ -302,68 +291,37 @@ interface PokemonOption {
         }
       }
       
-      .search-container {
-        position: relative;
-        
-        .search-input {
-          width: 100%;
-          padding: 10px 14px;
-          border: 1px solid #E2E8F0;
-          border-radius: 10px;
+      .pokemon-select {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        background: var(--surface-deep);
+        color: var(--text-body);
+        font-size: 14px;
+        cursor: pointer;
+
+        &:focus {
+          outline: none;
+          border-color: #7c3aed;
+          box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
         }
-        
-        .autocomplete-dropdown {
-          position: absolute;
-          top: 100%;
-          left: 0;
-          right: 0;
-          background: white;
-          border: 1px solid #E2E8F0;
-          border-radius: 10px;
-          max-height: 300px;
-          overflow-y: auto;
-          z-index: 10;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-          
-          .autocomplete-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px;
-            cursor: pointer;
-            transition: background 0.2s;
-            
-            &:hover {
-              background: #F8FAFC;
-            }
-            
-            .autocomplete-sprite {
-              width: 40px;
-              height: 40px;
-            }
-            
-            .autocomplete-info {
-              flex: 1;
-              
-              strong {
-                display: block;
-                margin-bottom: 4px;
-              }
-              
-              .pokemon-types {
-                display: flex;
-                gap: 4px;
-                
-                span {
-                  padding: 2px 8px;
-                  border-radius: 12px;
-                  font-size: 10px;
-                  color: white;
-                }
-              }
-            }
-          }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
+
+        option {
+          background: var(--surface-elevated);
+          color: var(--text-body);
+        }
+      }
+
+      .picker-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 6px;
       }
       
       .selected-pokemon {
@@ -377,8 +335,10 @@ interface PokemonOption {
           align-items: center;
           gap: 8px;
           padding: 6px 12px;
-          background: #F1F5F9;
+          background: var(--surface-deep);
+          border: 1px solid var(--glass-border);
           border-radius: 30px;
+          color: var(--text-body);
           
           img {
             width: 24px;
@@ -407,7 +367,8 @@ interface PokemonOption {
       
       .pokemon-subforms {
         .pokemon-subform {
-          background: #F8FAFC;
+          background: var(--surface-card);
+          border: 1px solid var(--glass-border);
           border-radius: 12px;
           padding: 16px;
           margin-bottom: 16px;
@@ -418,11 +379,11 @@ interface PokemonOption {
             align-items: center;
             margin-bottom: 16px;
             padding-bottom: 12px;
-            border-bottom: 1px solid #E2E8F0;
+            border-bottom: 1px solid var(--glass-border);
             
             h4 {
               margin: 0;
-              color: #1E293B;
+              color: var(--text-heading);
             }
             
             .pokemon-types {
@@ -532,7 +493,7 @@ interface PokemonOption {
         
         .toggle-label {
           font-weight: 500;
-          color: #334155;
+          color: var(--text-body);
         }
       }
       
@@ -541,8 +502,8 @@ interface PokemonOption {
         align-items: center;
         gap: 12px;
         padding: 16px;
-        background: #FEF3C7;
-        border: 1px solid #F59E0B;
+        background: var(--warning-bg);
+        border: 1px solid var(--warning-border);
         border-radius: 12px;
         margin-bottom: 24px;
         
@@ -556,13 +517,13 @@ interface PokemonOption {
           strong {
             display: block;
             margin-bottom: 4px;
-            color: #92400E;
+            color: var(--warning-title);
           }
           
           p {
             margin: 0;
             font-size: 13px;
-            color: #B45309;
+            color: var(--warning-text);
           }
         }
       }
@@ -572,7 +533,7 @@ interface PokemonOption {
         gap: 16px;
         justify-content: flex-end;
         padding-top: 16px;
-        border-top: 1px solid #E2E8F0;
+        border-top: 1px solid var(--glass-border);
         
         button {
           padding: 10px 24px;
@@ -583,16 +544,18 @@ interface PokemonOption {
           transition: all 0.3s;
           
           &.btn-secondary {
-            background: #F1F5F9;
-            color: #64748B;
+            background: var(--btn-secondary-bg);
+            border: 1px solid var(--btn-secondary-border);
+            color: var(--btn-secondary-text);
             
             &:hover {
-              background: #E2E8F0;
+              background: var(--surface-border);
+              color: var(--text-heading);
             }
           }
           
           &.btn-primary {
-            background: #6366F1;
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
             color: white;
             
             &:hover:not(:disabled) {
@@ -666,7 +629,7 @@ interface PokemonOption {
 
     .drag-hint {
       font-size: 12px;
-      color: #94a3b8;
+      color: var(--text-muted);
       margin: 8px 0 4px;
     }
 
@@ -681,7 +644,7 @@ interface PokemonOption {
       background: rgba(59, 130, 246, 0.12);
       border: 1px solid rgba(96, 165, 250, 0.35);
       font-size: 13px;
-      color: #e2e8f0;
+      color: var(--text-body);
     }
   `]
 })
@@ -697,9 +660,8 @@ export class TeamBuilderComponent implements OnInit {
   teamSaved = output<Team>();
 
   teamForm!: FormGroup;
-  /** Two-way search query (model API). */
-  searchTerm = model('');
-  searchResults = signal<PokemonOption[]>([]);
+  pickerPokemonId = signal<number | ''>('');
+  catalogLoading = signal(false);
   selectedPokemon = signal<PokemonOption[]>([]);
   competitiveMode = signal(false);
   toastMessage = signal('');
@@ -707,6 +669,15 @@ export class TeamBuilderComponent implements OnInit {
   existingTeams: Team[] = [];
   coverageResult = signal<TeamCoverageResult | null>(null);
   private allPokemon: Pokemon[] = [];
+
+  /** Pokémon not yet on the team, mapped for the add dropdown. */
+  availablePokemonOptions = computed((): PokemonOption[] => {
+    const selectedIds = new Set(this.selectedPokemon().map((p) => p.id));
+    return this.allPokemon
+      .filter((p) => !selectedIds.has(p.id))
+      .map((p) => this.toPokemonOption(p))
+      .sort((a, b) => a.id - b.id);
+  });
 
   constructor() {
     effect(() => {
@@ -736,22 +707,58 @@ export class TeamBuilderComponent implements OnInit {
     this.loadPokemonCatalog();
   }
 
-  /** Loads Pokémon list from store cache or fetches from PokéAPI for autocomplete. */
+  /** Loads Pokémon list from store cache or fetches from PokéAPI for the add dropdown. */
   loadPokemonCatalog() {
     this.pokemonStore.pokemon$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((list) => {
         this.allPokemon = list ?? [];
+        if (list?.length) {
+          this.catalogLoading.set(false);
+        }
       });
     const cached = this.pokemonStore.getState().pokemon?.length ?? 0;
     if (cached === 0) {
+      this.catalogLoading.set(true);
       this.pokemonStore
-        .fetchPokemon(20, 0)
+        .fetchPokemon(151, 0)
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
-          error: () => this.showToast('Could not load Pokémon for search.', 'error'),
+          next: () => this.catalogLoading.set(false),
+          error: () => {
+            this.catalogLoading.set(false);
+            this.showToast('Could not load Pokémon list.', 'error');
+          },
         });
     }
+  }
+
+  /** Maps store Pokémon to dropdown/chip option shape. */
+  toPokemonOption(p: Pokemon): PokemonOption {
+    return {
+      id: p.id,
+      name: p.name,
+      types: p.types?.map((t) => t.name) ?? [],
+      sprite: p.sprites || this.getPokemonSprite(p.id),
+    };
+  }
+
+  /**
+   * Adds the Pokémon chosen from the select to the team.
+   *
+   * @param id - Selected Pokémon id from dropdown
+   */
+  onPokemonSelect(id: number | string | ''): void {
+    if (id === '' || id == null) {
+      return;
+    }
+    const numericId = Number(id);
+    const pokemon = this.availablePokemonOptions().find((p) => p.id === numericId);
+    if (!pokemon) {
+      return;
+    }
+    this.addPokemon(pokemon);
+    this.pickerPokemonId.set('');
   }
   
   initForm() {
@@ -789,25 +796,6 @@ export class TeamBuilderComponent implements OnInit {
     this.selectedPokemon.set(list);
   }
   
-  onSearchChange(term: string) {
-    this.searchTerm.set(term);
-    if (term.length < 2) {
-      this.searchResults.set([]);
-      return;
-    }
-    const lower = term.toLowerCase();
-    const results = this.allPokemon
-      .filter((p) => p.name.toLowerCase().includes(lower))
-      .slice(0, 20)
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        types: p.types?.map((t) => t.name) ?? [],
-        sprite: p.sprites || this.getPokemonSprite(p.id),
-      }));
-    this.searchResults.set(results);
-  }
-  
   getPokemonSprite(id: number): string {
     return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
   }
@@ -824,8 +812,7 @@ export class TeamBuilderComponent implements OnInit {
     }
 
     this.selectedPokemon.update((list) => [...list, pokemon]);
-    this.searchTerm.set('');
-    this.searchResults.set([]);
+    this.pickerPokemonId.set('');
     
     // Add to FormArray
     const pokemonGroup = this.fb.group({
@@ -985,8 +972,7 @@ export class TeamBuilderComponent implements OnInit {
     while (this.pokemonArray.length) {
       this.pokemonArray.removeAt(0);
     }
-    this.searchTerm.set('');
-    this.searchResults.set([]);
+    this.pickerPokemonId.set('');
     this.competitiveMode.set(false);
     if (showMessage) {
       this.showToast('Form reset', 'info');

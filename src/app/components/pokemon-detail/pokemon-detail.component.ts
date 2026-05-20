@@ -138,30 +138,6 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
             </ng-template>
           </section>
 
-          <div class="moves-section" *ngIf="pokemon()?.moves?.length">
-            <h3>Moves</h3>
-            <ul class="tag-list">
-              <li *ngFor="let move of (pokemon()?.moves || [])">{{ move | titlecase }}</li>
-            </ul>
-          </div>
-
-          <div class="evolution-section" *ngIf="pokemon()?.evolutionChain?.length">
-            <h3>Evolution Chain</h3>
-            <ol class="evo-chain">
-              <li *ngFor="let step of (pokemon()?.evolutionChain || [])">{{ step | titlecase }}</li>
-            </ol>
-          </div>
-
-          <div class="abilities-section" *ngIf="pokemon()?.abilities?.length">
-            <h3>Abilities</h3>
-            <ul class="ability-list">
-              <li *ngFor="let row of (pokemon()?.abilities || [])">
-                <strong>{{ row?.pokemon_v2_ability?.name | titlecase }}</strong>
-                <span *ngIf="row?.is_hidden"> (Hidden)</span>
-              </li>
-            </ul>
-          </div>
-
           <div class="stats-section">
             <h3>Base Stats</h3>
             <div class="stats-grid">
@@ -199,7 +175,7 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     .detail-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(2, 6, 23, 0.72);
+      background: var(--modal-overlay-bg);
       z-index: 1000;
       opacity: 0;
       visibility: hidden;
@@ -217,12 +193,12 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
       top: 0;
       width: min(500px, 100vw);
       height: 100vh;
-      background: #0f172a;
-      color: #e2e8f0;
+      background: var(--modal-panel-bg);
+      color: var(--text-body);
       transform: translateX(100%);
       transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
       overflow-y: auto;
-      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.45);
+      box-shadow: var(--modal-panel-shadow);
     }
 
     .detail-panel.slide-in {
@@ -267,9 +243,9 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     .pokemon-image-container {
       text-align: center;
       padding: 12px;
-      background: rgba(30, 41, 59, 0.6);
+      background: var(--modal-section-bg);
       border-radius: 16px;
-      border: 1px solid rgba(148, 163, 184, 0.15);
+      border: 1px solid var(--modal-section-border);
     }
 
     .pokemon-image {
@@ -295,25 +271,8 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     }
 
     .cry-section,
-    .media-section,
-    .moves-section,
-    .evolution-section,
-    .abilities-section {
+    .media-section {
       margin: 16px 0;
-    }
-
-    .tag-list,
-    .ability-list,
-    .evo-chain {
-      margin: 0;
-      padding-left: 18px;
-      color: #cbd5e1;
-    }
-
-    .tag-list li,
-    .ability-list li,
-    .evo-chain li {
-      margin: 4px 0;
     }
 
     .stats-section {
@@ -325,7 +284,7 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     .stats-section h3 {
       margin: 0 0 12px;
       font-size: 1rem;
-      color: #cbd5e1;
+      color: var(--modal-heading);
       font-weight: 600;
     }
 
@@ -338,7 +297,7 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
 
     .cry-status {
       font-size: 0.75rem;
-      color: #94a3b8;
+      color: var(--text-muted);
     }
 
     .cry-player {
@@ -346,8 +305,8 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
       align-items: center;
       gap: 12px;
       padding: 12px;
-      background: rgba(30, 41, 59, 0.7);
-      border: 1px solid rgba(148, 163, 184, 0.15);
+      background: var(--modal-section-bg);
+      border: 1px solid var(--modal-section-border);
       border-radius: 12px;
     }
 
@@ -375,7 +334,7 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
       flex: 1;
       min-width: 4px;
       max-width: 10px;
-      background: #475569;
+      background: var(--modal-wave-bar);
       border-radius: 3px;
       height: 30%;
       transition: height 0.15s ease;
@@ -394,14 +353,14 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     .video-wrap {
       border-radius: 12px;
       overflow: hidden;
-      border: 1px solid rgba(148, 163, 184, 0.2);
+      border: 1px solid var(--modal-section-border);
     }
 
     .video-frame {
       position: relative;
       width: 100%;
       aspect-ratio: 16 / 9;
-      background: #020617;
+      background: var(--modal-media-bg);
     }
 
     .video-frame iframe {
@@ -429,14 +388,14 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
       justify-content: center;
       gap: 6px;
       border: none;
-      background: rgba(15, 23, 42, 0.35);
+      background: var(--modal-video-overlay);
       cursor: pointer;
-      color: #f8fafc;
+      color: var(--text-heading);
       transition: background 0.2s;
     }
 
     .video-overlay-btn:hover {
-      background: rgba(15, 23, 42, 0.5);
+      background: var(--modal-placeholder-overlay);
     }
 
     .overlay-icon {
@@ -454,7 +413,7 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     .overlay-text {
       font-size: 0.85rem;
       font-weight: 600;
-      color: #e2e8f0;
+      color: var(--modal-overlay-text);
     }
 
     .video-placeholder {
@@ -462,8 +421,8 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
       border-radius: 12px;
       overflow: hidden;
       aspect-ratio: 16 / 9;
-      background: #1e293b;
-      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: var(--modal-media-bg);
+      border: 1px solid var(--modal-section-border);
     }
 
     .placeholder-art {
@@ -480,8 +439,8 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: rgba(15, 23, 42, 0.72);
-      color: #e2e8f0;
+      background: var(--modal-placeholder-overlay);
+      color: var(--text-body);
       gap: 8px;
     }
 
@@ -492,7 +451,7 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     .placeholder-overlay p {
       margin: 0;
       font-weight: 600;
-      color: #f1f5f9;
+      color: var(--text-heading);
     }
 
     .stat-row {
@@ -505,7 +464,7 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     .stat-name {
       width: 72px;
       font-size: 0.72rem;
-      color: #94a3b8;
+      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.03em;
     }
@@ -513,7 +472,7 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     .stat-bar-container {
       flex: 1;
       height: 8px;
-      background: #334155;
+      background: var(--modal-stat-track);
       border-radius: 4px;
       overflow: hidden;
     }
@@ -529,7 +488,7 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
       width: 36px;
       text-align: right;
       font-weight: 700;
-      color: #f1f5f9;
+      color: var(--text-heading);
     }
 
     .info-section {
@@ -541,21 +500,21 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     .info-card {
       text-align: center;
       padding: 12px 8px;
-      background: rgba(30, 41, 59, 0.7);
-      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: var(--modal-section-bg);
+      border: 1px solid var(--modal-section-border);
       border-radius: 10px;
     }
 
     .info-label {
       display: block;
       font-size: 0.7rem;
-      color: #94a3b8;
+      color: var(--text-muted);
       margin-bottom: 4px;
     }
 
     .info-value {
       font-weight: 700;
-      color: #f1f5f9;
+      color: var(--text-heading);
     }
 
     .type-normal { background: #a8a878; }

@@ -22,27 +22,24 @@ Chart.register(...registerables);
   styles: [`
     .doughnut-chart-wrapper {
       position: relative;
-      width: 100%;
-      height: 320px;
+      width: min(100%, var(--doughnut-size, 240px));
+      max-width: var(--doughnut-size, 240px);
+      aspect-ratio: 1;
+      height: auto;
+      margin: 0 auto;
       display: block;
     }
     .doughnut-canvas {
+      display: block;
       width: 100% !important;
-      height: 320px !important;
+      height: 100% !important;
     }
     .chart-animated {
       animation: chartReveal 0.55s ease-out both;
     }
-    .chart-animated .doughnut-canvas {
-      animation: doughnutPulse 4s ease-in-out 0.7s infinite;
-    }
     @keyframes chartReveal {
-      from { opacity: 0; transform: rotate(-8deg) scale(0.85); }
-      to { opacity: 1; transform: rotate(0) scale(1); }
-    }
-    @keyframes doughnutPulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.012); }
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
     }
   `]
 })
@@ -54,6 +51,8 @@ export class DoughnutChartComponent implements AfterViewInit, OnDestroy {
   variant = input<'team' | 'battle'>('team');
   dark = input(false);
   animate = input(false);
+  /** Hide Chart.js legend when the parent renders a custom legend (e.g. Pokédex sidebar). */
+  showLegend = input(true);
   @ViewChild('doughnutCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
   
   private chart: Chart | null = null;
@@ -67,6 +66,7 @@ export class DoughnutChartComponent implements AfterViewInit, OnDestroy {
       this.variant();
       this.dark();
       this.animate();
+      this.showLegend();
       if (!this.viewReady) return;
       queueMicrotask(() => this.updateChart());
     });
@@ -116,9 +116,11 @@ export class DoughnutChartComponent implements AfterViewInit, OnDestroy {
     };
     
     return {
-      labels: types.map(t => t.name),
-      data: types.map(t => t.count),
-      colors: types.map(t => colorMap[t.name.toLowerCase()] || '#6366F1')
+      labels: types.map((t) => t.name),
+      data: types.map((t) => t.count),
+      colors: types.map(
+        (t) => t.color || colorMap[t.name.toLowerCase()] || '#7c3aed'
+      ),
     };
   }
   
@@ -151,17 +153,22 @@ export class DoughnutChartComponent implements AfterViewInit, OnDestroy {
         datasets: [{
           data: data,
           backgroundColor: colors,
-          borderWidth: 2,
-          borderColor: this.dark() ? '#1e293b' : 'white',
-          hoverOffset: 15,
-          borderRadius: 8,
-          spacing: 5
+          borderWidth: 3,
+          borderColor: this.dark() ? '#0f172a' : '#ffffff',
+          hoverOffset: 12,
+          borderRadius: 6,
+          spacing: 3,
+          hoverBorderWidth: 4,
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: true,
-        cutout: '60%',
+        aspectRatio: 1,
+        cutout: '62%',
+        layout: {
+          padding: 4,
+        },
         plugins: {
           tooltip: {
             callbacks: {
@@ -173,6 +180,7 @@ export class DoughnutChartComponent implements AfterViewInit, OnDestroy {
             }
           },
           legend: {
+            display: this.showLegend(),
             position: 'bottom',
             labels: {
               font: { size: 11 },
@@ -180,8 +188,8 @@ export class DoughnutChartComponent implements AfterViewInit, OnDestroy {
               boxWidth: 10,
               padding: 10,
               color: this.dark() ? '#94a3b8' : '#374151',
-            }
-          }
+            },
+          },
         },
         ...(this.animate()
           ? {

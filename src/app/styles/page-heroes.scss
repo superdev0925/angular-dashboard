@@ -1,6 +1,7 @@
 /* Shared dark page heroes + harmonized sections (teams, battles, profile) */
 
-.app.theme-dark {
+.app.theme-dark,
+.app.theme-light {
   .page-hero {
     position: relative;
     border-radius: 16px;
@@ -19,9 +20,7 @@
   .page-hero-bg {
     position: absolute;
     inset: 0;
-    background:
-      linear-gradient(100deg, rgba(11, 18, 32, 0.95) 0%, rgba(11, 18, 32, 0.5) 55%, rgba(124, 58, 237, 0.2) 100%),
-      radial-gradient(ellipse at 80% 20%, #312e81 0%, #0b1220 65%);
+    background: var(--hero-overlay), var(--hero-glow);
     pointer-events: none;
   }
 
@@ -30,7 +29,7 @@
     z-index: 1;
 
     .eyebrow {
-      color: #a78bfa;
+      color: var(--accent);
       font-size: 12px;
       font-weight: 700;
       letter-spacing: 0.12em;
@@ -39,17 +38,17 @@
     h1 {
       font-size: 1.75rem;
       margin: 8px 0;
-      color: #f1f5f9;
+      color: var(--text-heading);
       font-weight: 700;
 
       em {
-        color: #a78bfa;
+        color: var(--accent);
         font-style: normal;
       }
     }
 
     p {
-      color: #94a3b8;
+      color: var(--text-muted);
       font-size: 14px;
       max-width: 420px;
     }
@@ -62,24 +61,28 @@
 
   .section-title {
     font-size: 1rem;
-    color: #f1f5f9;
+    color: var(--text-heading);
     margin: 0;
   }
 
   .link-btn {
     background: none;
     border: none;
-    color: #a78bfa;
+    color: var(--accent);
     font-size: 13px;
     cursor: pointer;
     font-weight: 500;
+  }
+
+  .teams-page {
+    color: var(--text-body);
   }
 
   /* Teams */
   .teams-page .teams-container,
   .teams-container {
     h2, h3, .section-title {
-      color: #f1f5f9;
+      color: var(--text-heading);
     }
 
     .teams-header {
@@ -90,38 +93,63 @@
     }
 
     .teams-grid .team-card {
-      background: var(--dash-card, rgba(30, 41, 59, 0.55));
-      border: 1px solid var(--dash-border);
-      backdrop-filter: blur(12px);
+      background: var(--surface-card);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--shadow);
+      color: var(--text-body);
 
-      h3 { color: #f1f5f9; }
+      h3 {
+        color: var(--text-heading);
+      }
+
+      .team-card-footer strong {
+        color: var(--text-heading);
+      }
+
+      .team-sprites .sprite-placeholder {
+        background: var(--surface-deep);
+        border: 1px dashed var(--glass-border);
+      }
 
       &.add-team-card {
-        background: rgba(15, 23, 42, 0.5);
-        border: 2px dashed rgba(148, 163, 184, 0.25);
-        color: #94a3b8;
+        background: var(--surface-deep);
+        border: 2px dashed var(--glass-border);
+        color: var(--text-muted);
+        box-shadow: none;
+
+        .add-icon {
+          color: var(--accent);
+        }
 
         &:hover {
-          border-color: #7c3aed;
-          background: rgba(124, 58, 237, 0.1);
+          border-color: var(--primary);
+          background: var(--primary-light);
+          color: var(--text-body);
         }
       }
     }
 
     .empty-teams-hint {
       margin-top: 12px;
-      color: #94a3b8;
+      padding: 16px;
+      background: var(--surface-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      color: var(--text-muted);
       font-size: 13px;
+      text-align: center;
     }
   }
 
   /* Battles */
+  .battles-page {
+    color: var(--text-body);
+  }
+
   .battles-page .battles-container,
   .battles-container {
-    color: #e2e8f0;
-
-    h2, h3 {
-      color: #f1f5f9;
+    h2, h3, .section-title {
+      color: var(--text-heading);
     }
 
     .battles-header {
@@ -133,119 +161,160 @@
     }
 
     .battle-filter {
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid var(--dash-border);
-      color: #e2e8f0;
+      background: var(--surface-deep);
+      border: 1px solid var(--glass-border);
+      color: var(--text-body);
       padding: 10px 14px;
       border-radius: 10px;
     }
 
     .log-battle-form {
-      background: var(--dash-card);
-      border: 1px solid var(--dash-border);
+      background: var(--surface-card);
+      border: 1px solid var(--glass-border);
       border-radius: 12px;
       padding: 20px;
       margin-bottom: 20px;
-      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
 
-      h3 { color: #f1f5f9; margin-bottom: 12px; }
+      h3 {
+        color: var(--text-heading);
+        margin: 0 0 12px;
+        width: 100%;
+      }
 
-      input, select {
-        background: rgba(15, 23, 42, 0.8);
-        border: 1px solid var(--dash-border);
-        color: #e2e8f0;
+      input,
+      select {
+        background: var(--surface-deep);
+        border: 1px solid var(--glass-border);
+        color: var(--text-body);
         padding: 10px 12px;
         border-radius: 8px;
       }
 
       .create-team-btn {
-        background: #7c3aed;
-        color: white;
+        background: var(--primary);
+        color: #fff;
         border: none;
         padding: 10px 18px;
         border-radius: 10px;
         font-weight: 600;
         cursor: pointer;
+
+        &:hover {
+          background: var(--primary-dark);
+        }
       }
     }
 
-    .feed-note {
-      color: #64748b;
-      font-size: 13px;
-      margin-bottom: 8px;
-    }
-
-    .battle-log {
-      background: var(--dash-card);
-      border: 1px solid var(--dash-border);
-      border-radius: 12px;
-      padding: 16px;
-      max-height: 320px;
-      overflow-y: auto;
-    }
-
     .battles-table-wrap {
-      background: rgba(30, 41, 59, 0.55);
-      border: 1px solid var(--dash-border);
+      background: var(--surface-card);
+      border: 1px solid var(--glass-border);
       border-radius: 12px;
       overflow: hidden;
+      box-shadow: var(--shadow);
     }
 
     .battles-table {
       background: transparent;
 
+      th,
+      td {
+        text-align: center;
+        vertical-align: middle;
+      }
+
       th {
-        background: rgba(15, 23, 42, 0.82);
-        color: #94a3b8;
-        border-bottom: 1px solid var(--dash-border);
+        background: var(--table-header-bg);
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--table-border);
       }
 
       td {
-        color: #cbd5e1;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        color: var(--text-body);
+        border-bottom: 1px solid var(--table-border);
+        background: var(--surface-card);
       }
 
-      tbody tr:hover {
-        background: rgba(124, 58, 237, 0.08);
+      tbody tr:hover td {
+        background: var(--table-row-hover);
+      }
+
+      th.col-opponent,
+      .opponent-cell {
+        text-align: left;
+        justify-content: flex-start;
+      }
+
+      .result-pill.victory {
+        background: var(--success-bg);
+        color: var(--success-text);
+        border: 1px solid var(--success-border);
+      }
+
+      .result-pill.defeat {
+        background: var(--danger-bg);
+        color: var(--danger-text);
+        border: 1px solid var(--danger-border);
       }
     }
   }
 
   /* Profile */
+  .profile-page {
+    color: var(--text-body);
+  }
+
   .profile-page .profile-container,
   .profile-container {
     .profile-hero,
     .badges-section,
     .profile-stats-section {
-      background: var(--dash-card);
-      border: 1px solid var(--dash-border);
-      backdrop-filter: blur(12px);
-      color: #e2e8f0;
+      background: var(--surface-card);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--shadow);
+      color: var(--text-body);
     }
 
     .profile-hero-info h2 {
-      color: #f1f5f9;
+      color: var(--text-heading);
     }
 
     .profile-form {
       input {
-        background: rgba(15, 23, 42, 0.8);
-        border: 1px solid var(--dash-border);
-        color: #e2e8f0;
+        background: var(--surface-deep);
+        border: 1px solid var(--glass-border);
+        color: var(--text-body);
         padding: 10px 12px;
         border-radius: 8px;
         width: 100%;
       }
 
       label {
-        color: #94a3b8;
+        color: var(--text-muted);
         font-size: 13px;
       }
     }
 
     .badges-section h3,
     .profile-stats-section h3 {
-      color: #f1f5f9;
+      color: var(--text-heading);
+    }
+
+    .profile-stats-row .profile-stat {
+      background: var(--surface-deep);
+      border: 1px solid var(--glass-border);
+
+      strong {
+        color: var(--text-heading);
+      }
+
+      .text-success {
+        color: var(--success-text);
+      }
+
+      .text-danger {
+        color: var(--danger-text);
+      }
     }
   }
 

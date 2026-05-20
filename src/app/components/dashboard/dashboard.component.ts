@@ -7,6 +7,7 @@ import { PokemonSelectors } from '../../state/pokemon.selectors';
 import { RadarChartComponent } from '../charts/radar-chart/radar-chart.component';
 import { LineChartComponent } from '../charts/line-chart/line-chart.component';
 import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.component';
+import { DEFAULT_TRAINER_AVATAR, resolveOpponentAvatarUrl } from '../../utils/avatar-url';
 
 @Component({
   selector: 'app-dashboard',
@@ -14,7 +15,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, RadarChartComponent, LineChartComponent, DoughnutChartComponent],
   template: `
-    <div class="dashboard-dark">
+    <div class="dashboard-shell">
       <section class="hero-banner">
         <div class="hero-bg"></div>
         <div class="hero-content">
@@ -47,7 +48,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
       <div class="stats-grid">
         <div class="stat-card glass">
           <div class="stat-icon purple">⚔</div>
-          <div>
+          <div class="stat-body">
             <span class="stat-title">Total Battles</span>
             <p class="stat-value">{{ displayBattles }}</p>
             <span class="trend up">+12% vs last month</span>
@@ -55,7 +56,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
         </div>
         <div class="stat-card glass">
           <div class="stat-icon green">✓</div>
-          <div>
+          <div class="stat-body">
             <span class="stat-title">Wins</span>
             <p class="stat-value">{{ displayWins }}</p>
             <span class="trend up">+8% vs last month</span>
@@ -63,7 +64,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
         </div>
         <div class="stat-card glass">
           <div class="stat-icon red">✗</div>
-          <div>
+          <div class="stat-body">
             <span class="stat-title">Losses</span>
             <p class="stat-value">{{ displayLosses }}</p>
             <span class="trend down">-5% vs last month</span>
@@ -71,7 +72,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
         </div>
         <div class="stat-card glass">
           <div class="stat-icon gold">★</div>
-          <div>
+          <div class="stat-body">
             <span class="stat-title">Teams</span>
             <p class="stat-value">{{ displayTeams }}</p>
             <span class="trend up">+2 vs last month</span>
@@ -90,8 +91,8 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
           <div class="chart-body">
             <app-radar-chart
               [stats]="chartPokemonStats()"
-              [pokemonName]="chartPokemon()?.name || 'Pokémon'"
-              [dark]="true"
+              [pokemonName]="chartPokemonName()"
+              [dark]="chartDark()"
               [animate]="true">
             </app-radar-chart>
           </div>
@@ -99,32 +100,45 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
         <div class="chart-card glass">
           <div class="chart-header">
             <h3>Battle Performance</h3>
-            <select class="chart-select" disabled><option>Monthly</option></select>
+            <select
+              class="chart-select"
+              [ngModel]="battleChartPeriod()"
+              (ngModelChange)="onBattleChartPeriodChange($event)">
+              <option value="monthly">Monthly</option>
+              <option value="weekly">Weekly</option>
+            </select>
           </div>
           <div class="chart-body">
-            <app-line-chart [battles]="battles()" [animate]="true"></app-line-chart>
+            <app-line-chart
+              [battles]="battles()"
+              [period]="battleChartPeriod()"
+              [animate]="true">
+            </app-line-chart>
           </div>
         </div>
-        <div class="chart-card glass">
+        <div class="chart-card glass outcome-card">
           <div class="chart-header">
             <h3>Battle Outcome</h3>
           </div>
-          <div class="chart-body doughnut-wrap">
-            <app-doughnut-chart
-              variant="battle"
-              [wins]="displayWins"
-              [losses]="displayLosses"
-              [dark]="true"
-              [animate]="true">
-            </app-doughnut-chart>
-            <div class="doughnut-center">
-              <strong>{{ displayBattles }}</strong>
-              <span>Total Battles</span>
+          <div class="outcome-layout">
+            <div class="chart-body doughnut-wrap">
+              <app-doughnut-chart
+                variant="battle"
+                [wins]="displayWins"
+                [losses]="displayLosses"
+                [dark]="chartDark()"
+                [animate]="true"
+                [showLegend]="false">
+              </app-doughnut-chart>
+              <div class="doughnut-center">
+                <strong>{{ displayBattles }}</strong>
+                <span>Total Battles</span>
+              </div>
             </div>
-          </div>
-          <div class="outcome-legend">
-            <span><i class="dot purple"></i> Wins {{ displayWins }} ({{ winPct | number:'1.1-1' }}%)</span>
-            <span><i class="dot pink"></i> Losses {{ displayLosses }} ({{ lossPct | number:'1.1-1' }}%)</span>
+            <div class="outcome-legend">
+              <span><i class="dot purple"></i> Wins {{ displayWins }} ({{ winPct | number:'1.1-1' }}%)</span>
+              <span><i class="dot pink"></i> Losses {{ displayLosses }} ({{ lossPct | number:'1.1-1' }}%)</span>
+            </div>
           </div>
         </div>
       </div>
@@ -135,6 +149,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
             <h3>Recent Battles</h3>
             <button type="button" class="link-btn" (click)="viewAllBattles.emit()">View All</button>
           </div>
+          <div class="table-scroll" role="region" aria-label="Recent battles" tabindex="0">
           <table>
             <thead>
               <tr>
@@ -148,7 +163,10 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
             <tbody>
               <tr *ngFor="let battle of recentBattles()">
                 <td class="opponent">
-                  <img [src]="opponentAvatar(battle.opponent_name)" alt="">
+                  <img
+                    [src]="opponentAvatar(battle.opponent_name)"
+                    [alt]="battle.opponent_name"
+                    (error)="onOpponentAvatarError($event)">
                   <div>
                     <strong>{{ battle.opponent_name }}</strong>
                     <span class="sub">{{ opponentSubtitle(battle.opponent_name) }}</span>
@@ -176,6 +194,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
 
         <div class="panel glass badges-panel">
@@ -198,12 +217,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
     </div>
   `,
   styles: [`
-    .dashboard-dark {
-      --dash-bg: #0b1220;
-      --dash-card: rgba(30, 41, 59, 0.55);
-      --dash-border: rgba(148, 163, 184, 0.12);
-      --dash-text: #f1f5f9;
-      --dash-muted: #94a3b8;
+    .dashboard-shell {
       color: var(--dash-text);
       width: 100%;
     }
@@ -213,6 +227,11 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
       border: 1px solid var(--dash-border);
       border-radius: 16px;
       backdrop-filter: blur(12px);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .chart-select:hover {
+      border-color: var(--primary);
     }
 
     .hero-banner {
@@ -227,9 +246,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
     .hero-bg {
       position: absolute;
       inset: 0;
-      background:
-        linear-gradient(105deg, rgba(11, 18, 32, 0.92) 0%, rgba(11, 18, 32, 0.5) 45%, rgba(124, 58, 237, 0.25) 100%),
-        linear-gradient(180deg, #312e81 0%, #7c2d12 35%, #f59e0b 70%, #1e1b4b 100%);
+      background: var(--dashboard-hero-bg);
     }
 
     .hero-content {
@@ -262,7 +279,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
 
     .ring-card {
       text-align: center;
-      background: rgba(15, 23, 42, 0.6);
+      background: var(--ring-card-bg);
       border: 1px solid var(--dash-border);
       border-radius: 12px;
       padding: 12px 16px;
@@ -294,12 +311,15 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
       position: absolute;
       inset: 5px;
       border-radius: 50%;
-      background: #0f172a;
+      background: var(--ring-inner-bg);
     }
 
     .ring span {
       position: relative;
       z-index: 1;
+      color: var(--ring-label-color);
+      font-weight: 700;
+      font-size: 13px;
     }
 
     .ring-label {
@@ -330,16 +350,31 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
+    @media (max-width: 640px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .hero-gengar { width: 110px; height: 110px; right: 8px; opacity: 0.85; }
+      .hero-rings { width: 100%; justify-content: center; }
+      .badges-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
     .stat-card {
       display: flex;
       align-items: center;
       gap: 16px;
       padding: 20px;
+      min-width: 0;
+    }
+
+    .stat-body {
+      flex: 1;
+      min-width: 0;
     }
 
     .stat-icon {
       width: 48px;
       height: 48px;
+      min-width: 48px;
+      flex-shrink: 0;
       border-radius: 12px;
       display: flex;
       align-items: center;
@@ -368,10 +403,11 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
 
     .trend {
       font-size: 12px;
+      font-weight: 500;
     }
 
-    .trend.up { color: #34d399; }
-    .trend.down { color: #f87171; }
+    .trend.up { color: var(--trend-up-color); }
+    .trend.down { color: var(--trend-down-color); }
 
     .charts-row {
       display: grid;
@@ -439,25 +475,42 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
     }
 
     .chart-select {
-      background: rgba(15, 23, 42, 0.8);
+      background: var(--surface-deep);
       border: 1px solid var(--dash-border);
       color: var(--dash-text);
       border-radius: 8px;
       padding: 6px 10px;
       font-size: 12px;
+      cursor: pointer;
     }
 
     .chart-body {
       min-height: 260px;
     }
 
+    .outcome-card .chart-body {
+      min-height: 0;
+    }
+
+    .outcome-layout {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
     .doughnut-wrap {
       position: relative;
+      width: 100%;
+      max-width: 260px;
+      margin: 0 auto;
+      --doughnut-size: 220px;
+      min-height: 220px;
     }
 
     .doughnut-center {
       position: absolute;
-      top: 42%;
+      top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       text-align: center;
@@ -467,6 +520,7 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
     .doughnut-center strong {
       display: block;
       font-size: 1.5rem;
+      color: var(--text-heading);
     }
 
     .doughnut-center span {
@@ -477,10 +531,18 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
     .outcome-legend {
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      font-size: 12px;
+      gap: 8px;
+      font-size: 13px;
       color: var(--dash-muted);
-      margin-top: 8px;
+      width: 100%;
+      max-width: 260px;
+      padding: 0 8px;
+    }
+
+    .outcome-legend span {
+      display: flex;
+      align-items: center;
+      white-space: nowrap;
     }
 
     .dot {
@@ -529,8 +591,20 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
       font-weight: 500;
     }
 
+    .table-scroll {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 8px;
+    }
+
+    .table-scroll::-webkit-scrollbar {
+      height: 6px;
+    }
+
     table {
       width: 100%;
+      min-width: 560px;
       border-collapse: collapse;
       font-size: 13px;
     }
@@ -543,12 +617,21 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
       font-weight: 600;
       padding: 8px 10px;
       border-bottom: 1px solid var(--dash-border);
+      white-space: nowrap;
     }
 
     td {
       padding: 12px 10px;
       border-bottom: 1px solid var(--dash-border);
       vertical-align: middle;
+    }
+
+    tbody tr {
+      transition: background-color 0.2s ease;
+    }
+
+    tbody tr:hover {
+      background: var(--table-row-hover);
     }
 
     tr:last-child td { border-bottom: none; }
@@ -574,11 +657,16 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
     .result.win { color: #34d399; font-weight: 600; }
     .result:not(.win) { color: #f87171; font-weight: 600; }
 
+    .sprites {
+      white-space: nowrap;
+    }
+
     .sprites img {
       width: 28px;
       height: 28px;
       margin-right: 2px;
       image-rendering: pixelated;
+      vertical-align: middle;
     }
 
     .type-pill {
@@ -601,8 +689,14 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
 
     .badges-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
       gap: 12px;
+    }
+
+    @media (max-width: 1000px) {
+      .recent-battles .opponent strong {
+        font-size: 12px;
+      }
     }
 
     .badge-tile {
@@ -612,23 +706,30 @@ import { DoughnutChartComponent } from '../charts/doughnut-chart/doughnut-chart.
       gap: 6px;
       padding: 12px 8px;
       border-radius: 12px;
-      background: rgba(15, 23, 42, 0.5);
-      border: 1px solid var(--dash-border);
-      opacity: 0.4;
+      background: var(--badge-tile-bg);
+      border: 1px solid var(--badge-tile-border);
+      opacity: 0.55;
     }
 
     .badge-tile.earned {
       opacity: 1;
-      border-color: rgba(124, 58, 237, 0.4);
-      box-shadow: 0 0 12px rgba(124, 58, 237, 0.15);
+      background: var(--badge-tile-earned-bg);
+      border-color: var(--primary);
+      box-shadow: 0 0 12px var(--primary-light);
     }
 
     .badge-emoji { font-size: 22px; }
-    .badge-name { font-size: 10px; color: var(--dash-muted); text-align: center; }
+    .badge-name {
+      font-size: 10px;
+      color: var(--badge-tile-text);
+      text-align: center;
+      font-weight: 500;
+    }
   `],
 })
 export class DashboardComponent {
   trainerName = input<string>('Ash');
+  chartDark = input(false);
   pokemonCount = input<number>(0);
   winRate = input<number>(0);
   totalBattles = input<number>(0);
@@ -650,11 +751,18 @@ export class DashboardComponent {
   private pokemonSelectors = inject(PokemonSelectors);
 
   chartPokemonId = signal(1);
+  battleChartPeriod = signal<'monthly' | 'weekly'>('monthly');
 
-  chartPokemon = computed(() => {
+  chartPokemon = computed((): Pokemon | null => {
     const id = this.chartPokemonId();
     const options = this.chartPokemonOptions();
     return options.find((p) => p.id === id) ?? options[0] ?? this.selectedPokemon();
+  });
+
+  /** Display name for radar chart (avoids optional chaining in template). */
+  chartPokemonName = computed(() => {
+    const p = this.chartPokemon();
+    return p?.name ?? 'Pokémon';
   });
 
   chartPokemonStats = computed(() => {
@@ -720,6 +828,12 @@ export class DashboardComponent {
     this.chartPokemonChange.emit(Number(id));
   }
 
+  onBattleChartPeriodChange(value: string): void {
+    if (value === 'monthly' || value === 'weekly') {
+      this.battleChartPeriod.set(value);
+    }
+  }
+
   battlePokemonIds(battle: Battle): number[] {
     const team = this.teams().find((t) => t.id === battle.team_id);
     return team?.pokemon_ids?.slice(0, 4) ?? [];
@@ -748,8 +862,14 @@ export class DashboardComponent {
   }
 
   opponentAvatar(name: string): string {
-    const id = (name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 16) + 1;
-    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/trainers/${id}.png`;
+    return resolveOpponentAvatarUrl(name);
+  }
+
+  onOpponentAvatarError(event: Event): void {
+    const img = event.target as HTMLImageElement;
+    if (!img.src.includes(DEFAULT_TRAINER_AVATAR)) {
+      img.src = DEFAULT_TRAINER_AVATAR;
+    }
   }
 
   opponentSubtitle(name: string): string {

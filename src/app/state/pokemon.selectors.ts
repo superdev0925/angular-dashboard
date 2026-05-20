@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { combineLatest, Observable } from 'rxjs';
 import { map, distinctUntilChanged, debounceTime, shareReplay, tap } from 'rxjs/operators';
 import { PokemonStore, Pokemon } from './pokemon.store';
+import { buildStatMap, getPokemonTotal } from '../utils/pokemon-stats.util';
 
 export interface PokemonFilter {
   searchTerm: string;
@@ -103,8 +104,7 @@ export class PokemonSelectors {
    * @returns number - Sum of all base stats
    */
   calculateTotalStats(pokemon: Pokemon): number {
-    const stats = pokemon?.stats || [];
-    return stats.reduce((sum, stat) => sum + (Number(stat?.base_stat) || 0), 0);
+    return getPokemonTotal(pokemon?.stats);
   }
 
   /**
@@ -138,14 +138,15 @@ export class PokemonSelectors {
    * @returns number[] - Array of stat values
    */
   getStatsForRadar(pokemon: Pokemon): number[] {
-    const statOrder = ['hp', 'attack', 'defense', 'special-attack', 'special-defense', 'speed'];
-    return statOrder.map((statName) => {
-      const stat = pokemon.stats.find((s) => {
-        const name = (s.stat?.name ?? '').toLowerCase().replace(/_/g, '-');
-        return name === statName;
-      });
-      return stat?.base_stat || 0;
-    });
+    const map = buildStatMap(pokemon.stats);
+    return [
+      map.hp,
+      map.attack,
+      map.defense,
+      map['special-attack'],
+      map['special-defense'],
+      map.speed,
+    ];
   }
 
   /**

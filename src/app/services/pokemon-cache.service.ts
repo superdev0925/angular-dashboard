@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Pokemon } from '../state/pokemon.store';
 
 const DB_NAME = 'pokedex-trainer-dashboard';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_POKEMON = 'pokemon';
 const STORE_META = 'meta';
 
@@ -24,14 +24,18 @@ export class PokemonCacheService {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
-      request.onupgradeneeded = () => {
+      request.onupgradeneeded = (event) => {
         const db = request.result;
-        if (!db.objectStoreNames.contains(STORE_POKEMON)) {
-          db.createObjectStore(STORE_POKEMON);
+        if (event.oldVersion < DB_VERSION) {
+          if (db.objectStoreNames.contains(STORE_POKEMON)) {
+            db.deleteObjectStore(STORE_POKEMON);
+          }
+          if (db.objectStoreNames.contains(STORE_META)) {
+            db.deleteObjectStore(STORE_META);
+          }
         }
-        if (!db.objectStoreNames.contains(STORE_META)) {
-          db.createObjectStore(STORE_META);
-        }
+        db.createObjectStore(STORE_POKEMON);
+        db.createObjectStore(STORE_META);
       };
     });
     return this.dbPromise;

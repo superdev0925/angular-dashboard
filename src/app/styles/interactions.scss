@@ -1,0 +1,69 @@
+/* Shared hover / focus affordances (pointer devices only) */
+@media (hover: hover) {
+  a:not([aria-disabled='true']),
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  .nav-item,
+  .stat-card,
+  .chart-card,
+  .glass.panel,
+  .overview-card,
+  .badge-tile,
+  .team-card,
+  .toolbar-add-team,
+  .link-btn,
+  .logout-btn,
+  .theme-option,
+  .settings-btn,
+  .notification,
+  .pagination button,
+  .view-btn,
+  .pokedex-table tbody tr,
+  .battles-table tbody tr,
+  .recent-battles tbody tr {
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease,
+      color 0.2s ease,
+      opacity 0.2s ease;
+  }
+
+  .stat-card:hover,
+  .chart-card:hover,
+  .glass.panel:hover,
+  .overview-card:hover,
+  .team-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover, 0 8px 24px rgba(15, 23, 42, 0.12));
+    border-color: var(--hover-border, rgba(124, 58, 237, 0.35));
+  }
+
+  .badge-tile:hover {
+    transform: translateY(-1px);
+    border-color: var(--primary);
+    opacity: 1;
+  }
+
+  .pokedex-table tbody tr:hover,
+  .battles-table tbody tr:hover,
+  .recent-battles tbody tr:hover {
+    background: var(--table-row-hover);
+  }
+
+  .nav-item:hover:not(.active) {
+    background: var(--sidebar-hover);
+    color: var(--text-heading, #fff);
+  }
+
+  button:not(:disabled):hover,
+  .link-btn:hover,
+  .toolbar-add-team:hover {
+    filter: brightness(1.08);
+  }
+
+  .header-avatar:hover {
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+}

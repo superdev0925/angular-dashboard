@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TrainerStore, Trainer } from '../../state/trainer.store';
+import { DEFAULT_TRAINER_AVATAR, resolveTrainerAvatarUrl } from '../../utils/avatar-url';
 
 @Component({
   selector: 'app-profile-page',
@@ -14,7 +15,7 @@ import { TrainerStore, Trainer } from '../../state/trainer.store';
       
       <div class="profile-card" *ngIf="trainer() as t">
         <div class="avatar">
-          <img [src]="t.avatar_url || defaultAvatar" [alt]="t.name">
+          <img [src]="trainerAvatarUrl(t.avatar_url)" [alt]="t.name" (error)="onAvatarError($event)">
         </div>
         
         <div class="profile-info">
@@ -78,8 +79,17 @@ export class ProfilePageComponent implements OnInit {
   trainer = signal<Trainer | null>(null);
   teams = signal<any[]>([]);
   editTrainer: Partial<Trainer> = {};
-  defaultAvatar = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/trainers/1.png';
-  
+  trainerAvatarUrl(url?: string | null): string {
+    return resolveTrainerAvatarUrl(url);
+  }
+
+  onAvatarError(event: Event): void {
+    const img = event.target as HTMLImageElement;
+    if (!img.src.includes(DEFAULT_TRAINER_AVATAR)) {
+      img.src = DEFAULT_TRAINER_AVATAR;
+    }
+  }
+
   ngOnInit() {
     this.trainerStore.currentTrainer$.subscribe(trainer => {
       this.trainer.set(trainer);
