@@ -1,0 +1,568 @@
+<div class="app theme-dark">
+  <!-- Sidebar -->
+  <aside class="sidebar" [class.collapsed]="sidebarCollapsed()">
+    <div class="sidebar-header">
+      <div class="logo" (click)="toggleSidebar()">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text" *ngIf="!sidebarCollapsed()">Poké<span>Dex</span></span>
+      </div>
+    </div>
+    
+    <nav class="nav-menu">
+      <div class="nav-section">
+        <p class="nav-label" *ngIf="!sidebarCollapsed()">MAIN</p>
+        <a routerLink="/dashboard" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'dashboard'">
+          <span class="nav-icon">📊</span>
+          <span *ngIf="!sidebarCollapsed()">Dashboard</span>
+        </a>
+        <a routerLink="/pokedex" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'pokedex'">
+          <span class="nav-icon">📋</span>
+          <span *ngIf="!sidebarCollapsed()">Pokédex</span>
+        </a>
+        <a routerLink="/teams" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'teams'">
+          <span class="nav-icon">👥</span>
+          <span *ngIf="!sidebarCollapsed()">My Teams</span>
+        </a>
+        <a routerLink="/battles" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'battles'">
+          <span class="nav-icon">⚔️</span>
+          <span *ngIf="!sidebarCollapsed()">Battle Log</span>
+        </a>
+        <a routerLink="/profile" routerLinkActive="active" class="nav-item" [class.active]="activeTab() === 'profile'">
+          <span class="nav-icon">👤</span>
+          <span *ngIf="!sidebarCollapsed()">Profile</span>
+        </a>
+      </div>
+    </nav>
+    
+    <div class="sidebar-footer" *ngIf="!sidebarCollapsed()">
+      <div class="trainer-card">
+        <img [src]="trainerAvatarUrl()" alt="Trainer">
+        <div class="trainer-meta">
+          <h4>{{ currentTrainer()?.name || 'Ash Ketchum' }}</h4>
+          <p>{{ currentTrainer()?.rank || 'Champion' }}</p>
+          <span class="trainer-level">Lv. {{ trainerLevel() }}</span>
+        </div>
+      </div>
+      <div class="sidebar-mini-stats">
+        <div><strong>{{ currentTrainer()?.badge_count ?? 0 }}</strong><span>Badges</span></div>
+        <div><strong>{{ pokemonList().length }}</strong><span>Pokémon</span></div>
+        <div><strong>{{ battles().length }}</strong><span>Battles</span></div>
+      </div>
+      <button type="button" class="logout-btn" (click)="onLogout()">Logout</button>
+    </div>
+  </aside>
+  
+  <!-- Main Content -->
+  <main class="main" [class.sidebar-collapsed]="sidebarCollapsed()">
+    <div *ngIf="offlineService.isOffline()" class="offline-banner" role="status">
+      <strong>Offline Mode</strong>
+      <span>Showing cached Pokédex data.</span>
+      <span *ngIf="offlineService.pendingMutationCount() > 0" class="pending-sync">
+        {{ offlineService.pendingMutationCount() }} change(s) queued — will sync when online.
+      </span>
+    </div>
+    <!-- Header -->
+    <header class="header header-dark">
+      <div class="header-right header-right-full">
+        <div class="search">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event); onSearchChange()"
+            [placeholder]="getSearchPlaceholder()">
+          <kbd class="search-kbd">⌘ K</kbd>
+        </div>
+        <button type="button" class="notification">
+          🔔
+          <span class="notif-badge">{{ battleLogs().length }}</span>
+        </button>
+        <img
+          class="header-avatar"
+          [src]="trainerAvatarUrl()"
+          alt="Profile">
+      </div>
+    </header>
+    
+    <!-- Dashboard Tab -->
+    <div *ngIf="activeTab() === 'dashboard'" @tabContent class="dashboard-tab">
+      <app-dashboard
+        [trainerName]="currentTrainer()?.name?.split(' ')?.[0] || 'Ash'"
+        [pokemonCount]="pokemonList().length"
+        [winRate]="winRate()"
+        [totalBattles]="battles().length"
+        [wins]="totalWins()"
+        [losses]="totalLosses()"
+        [teamCount]="teams().length"
+        [selectedPokemon]="dashboardChartPokemon()"
+        [chartPokemonOptions]="chartPokemonOptions()"
+        [battles]="battles()"
+        [teams]="teams()"
+        [recentBattles]="recentBattles()"
+        [gymBadges]="gymBadges"
+        [badgeCount]="currentTrainer()?.badge_count ?? 0"
+        (chartPokemonChange)="onDashboardPokemonChange($event)"
+        (viewAllBattles)="setActiveTab('battles')"
+        (viewAllProfile)="setActiveTab('profile')">
+      </app-dashboard>
+    </div>
+    
+    <!-- Pokédex Tab -->
+    <div *ngIf="activeTab() === 'pokedex'" @tabContent class="pokedex-page">
+      <section class="pokedex-hero">
+        <div class="pokedex-hero-bg"></div>
+        <div class="pokedex-hero-content">
+          <div class="pokedex-hero-text">
+            <span class="eyebrow">POKÉDEX</span>
+            <h1>Explore. Compare. <em>Master.</em></h1>
+            <p>Dive into detailed Pokémon stats and find your next powerhouse.</p>
+          </div>
+          <div class="pokedex-overview-cards">
+            <div class="overview-card">
+              <span class="ov-icon purple">⚪</span>
+              <div><strong>{{ pokedexCatalogTotal() }}</strong><span>Total Pokémon</span></div>
+            </div>
+            <div class="overview-card">
+              <span class="ov-icon green">🍃</span>
+              <div><strong>{{ allTypes().length }}</strong><span>Types</span></div>
+            </div>
+            <div class="overview-card">
+              <span class="ov-icon gold">⭐</span>
+              <div><strong>{{ pokemonList().length }}</strong><span>In Your Collection</span></div>
+            </div>
+            <div class="overview-card">
+              <span class="ov-icon blue">⚔</span>
+              <div><strong>{{ battles().length }}</strong><span>Total Battles</span></div>
+            </div>
+          </div>
+        </div>
+        <img
+          class="pokedex-hero-gengar"
+          src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png"
+          alt="Gengar"
+        />
+      </section>
+
+      <div class="pokedex-toolbar glass">
+        <div class="toolbar-type">
+          <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event); onTypeFilterChange()">
+            <option value="">All Types</option>
+            <option *ngFor="let type of allTypes()" [value]="type.name">{{ type.name | titlecase }}</option>
+          </select>
+          <div class="type-icon-row">
+            <span *ngFor="let type of featuredTypeIcons()" class="type-dot" [style.background]="getTypeColor(type.name)" [title]="type.name"></span>
+          </div>
+        </div>
+        <div class="toolbar-search">
+          <span>🔍</span>
+          <input type="text" placeholder="Search Pokémon..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); onSearchChange()">
+        </div>
+        <div class="toolbar-sort">
+          <label>Sort by</label>
+          <select [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)">
+            <option value="id"># ID</option>
+            <option value="name">Name</option>
+            <option value="hp">HP</option>
+            <option value="attack">ATK</option>
+            <option value="defense">DEF</option>
+            <option value="special-attack">SP. ATK</option>
+            <option value="special-defense">SP. DEF</option>
+            <option value="speed">SPEED</option>
+            <option value="total">TOTAL</option>
+          </select>
+        </div>
+        <div class="toolbar-sort">
+          <label>Order</label>
+          <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)">
+            <option value="asc">Ascending ↑</option>
+            <option value="desc">Descending ↓</option>
+          </select>
+        </div>
+        <div class="toolbar-sort">
+          <label>Items per page</label>
+          <select [ngModel]="itemsPerPage()" (ngModelChange)="changeItemsPerPage($event)">
+            <option [value]="10">10</option>
+            <option [value]="25">25</option>
+            <option [value]="50">50</option>
+          </select>
+        </div>
+        <div class="toolbar-stat-range">
+          <label>Min {{ minStats() }}</label>
+          <input type="range" min="0" max="800" [ngModel]="minStats()" (ngModelChange)="minStats.set(+$event); currentPage.set(1)">
+          <label>Max {{ maxStats() }}</label>
+          <input type="range" min="0" max="800" [ngModel]="maxStats()" (ngModelChange)="maxStats.set(+$event); currentPage.set(1)">
+        </div>
+        <div class="toolbar-highlight">
+          <label>Highlight</label>
+          <select [ngModel]="typeHighlightFilter()" (ngModelChange)="typeHighlightFilter.set($event)">
+            <option value="">Off</option>
+            <option *ngFor="let type of allTypes()" [value]="type.name">{{ type.name | titlecase }}</option>
+          </select>
+        </div>
+        <div class="toolbar-results">Showing {{ showingFrom() }} - {{ showingTo() }} of {{ totalResults() }} Pokémon</div>
+        <button type="button" class="toolbar-add-team" *ngIf="selectedRowIds().size" (click)="addSelectedToTeam()">+ Team ({{ selectedRowIds().size }})</button>
+      </div>
+
+      <div class="pokedex-layout">
+        <div class="pokedex-main">
+      <!-- Loading -->
+      <div *ngIf="loading()" class="loading loading-with-skeleton">
+        <div class="pokeball" aria-hidden="true"></div>
+        <p>Loading Pokémon...</p>
+        <div class="skeleton-table">
+          <div
+            *ngFor="let row of skeletonRows; let i = index"
+            class="skeleton-row shimmer"
+            [style.animation-delay.ms]="i * 70"></div>
+        </div>
+      </div>
+      
+      <!-- No Results -->
+      <div *ngIf="!loading() && totalResults() === 0" class="no-results">
+        <p>No Pokémon found. Try adjusting your search.</p>
+      </div>
+
+      <!-- Pokémon Table -->
+      <div *ngIf="!loading() && totalResults() > 0" class="pokedex-table glass">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th (click)="onSortChange('id')"># <span *ngIf="sortBy() === 'id'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
+              <th (click)="onSortChange('name')">Pokémon <span *ngIf="sortBy() === 'name'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
+              <th>Types</th>
+              <th (click)="onSortChange('hp')">HP <span *ngIf="sortBy() === 'hp'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
+              <th (click)="onSortChange('attack')">ATK <span *ngIf="sortBy() === 'attack'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
+              <th (click)="onSortChange('defense')">DEF <span *ngIf="sortBy() === 'defense'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
+              <th (click)="onSortChange('special-attack')">SP. ATK <span *ngIf="sortBy() === 'special-attack'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
+              <th (click)="onSortChange('special-defense')">SP. DEF <span *ngIf="sortBy() === 'special-defense'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
+              <th (click)="onSortChange('speed')">SPEED <span *ngIf="sortBy() === 'speed'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
+              <th (click)="onSortChange('total')">TOTAL <span *ngIf="sortBy() === 'total'">{{ sortOrder() === 'asc' ? '↑' : '↓' }}</span></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let pokemon of paginatedPokemon(); let i = index"
+              class="stagger-row"
+              [style.animation-delay.ms]="i * 45"
+              (click)="selectPokemon(pokemon)"
+              [class.selected-row]="isRowSelected(pokemon.id)"
+              [appTypeHighlight]="typeHighlightFilter()"
+              [defendingTypes]="getDefendingTypes(pokemon)">
+              <td (click)="toggleRowSelection(pokemon.id, $event)">
+                <input type="checkbox" [checked]="isRowSelected(pokemon.id)" (click)="toggleRowSelection(pokemon.id, $event)">
+              </td>
+              <td class="pokemon-id">#{{ pokemon?.id || 0 }}</td>
+              <td class="pokemon-name">
+                <img [src]="getPokemonSprite(pokemon)" [alt]="pokemon?.name || 'Pokemon'">
+                <span>{{ pokemon?.name || 'Unknown' | titlecase }}</span>
+              </td>
+              <td class="pokemon-types">
+                <span *ngFor="let type of pokemon?.types || []" class="type-badge" [style.backgroundColor]="getTypeColor(type?.name)">
+                  {{ type?.name || 'unknown' }}
+                </span>
+              </td>
+              <td>{{ getStat(pokemon, 'hp') }}</td>
+              <td>{{ getStat(pokemon, 'attack') }}</td>
+              <td>{{ getStat(pokemon, 'defense') }}</td>
+              <td>{{ getStat(pokemon, 'special-attack') }}</td>
+              <td>{{ getStat(pokemon, 'special-defense') }}</td>
+              <td>{{ getStat(pokemon, 'speed') }}</td>
+              <td class="total-stat">{{ getTotalStats(pokemon) }}</td>
+              <td>
+                <button type="button" class="view-eye-btn" (click)="selectPokemon(pokemon); $event.stopPropagation()" title="View">👁</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div *ngIf="!loading() && totalPages() > 1" class="pagination pokedex-pagination">
+        <button type="button" (click)="prevPage()" [disabled]="currentPage() === 1">←</button>
+        <div class="page-numbers">
+          <ng-container *ngFor="let page of getPageNumbers()">
+            <button type="button" *ngIf="page !== '...'" class="page-number" [class.active]="currentPage() === page" (click)="goToPage(page)">{{ page }}</button>
+            <span *ngIf="page === '...'" class="page-dots">...</span>
+          </ng-container>
+        </div>
+        <button type="button" (click)="nextPage()" [disabled]="currentPage() === totalPages()">→</button>
+      </div>
+        </div>
+
+        <aside class="pokedex-charts">
+          <div class="chart-panel glass">
+            <div class="chart-panel-header">
+              <h3>Total Stats Distribution</h3>
+              <select disabled><option>All Types</option></select>
+            </div>
+            <div class="chart-panel-body doughnut-wrap">
+              <app-doughnut-chart [teamTypes]="statRangeDistribution()" [dark]="true" [animate]="true"></app-doughnut-chart>
+              <div class="doughnut-center">
+                <strong>{{ pokedexCatalogTotal() }}</strong>
+                <span>Pokémon</span>
+              </div>
+            </div>
+            <ul class="chart-legend">
+              <li *ngFor="let seg of statRangeDistribution()">
+                <i [style.background]="seg.color"></i>
+                {{ seg.name }} · {{ seg.count }}
+              </li>
+            </ul>
+          </div>
+          <div class="chart-panel glass">
+            <h3>Type Breakdown</h3>
+            <div class="chart-panel-body doughnut-wrap">
+              <app-doughnut-chart [teamTypes]="typeBreakdownChart()" [dark]="true" [animate]="true"></app-doughnut-chart>
+              <div class="doughnut-center">
+                <strong>{{ pokedexCatalogTotal() }}</strong>
+                <span>Pokémon</span>
+              </div>
+            </div>
+            <ul class="chart-legend">
+              <li *ngFor="let seg of typeBreakdownChart()">
+                <i [style.background]="seg.color"></i>
+                {{ seg.name }} · {{ seg.count }}
+              </li>
+            </ul>
+            <p class="chart-footer">Total Types: {{ allTypes().length }}</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+    
+    <!-- Team Builder Tab -->
+    <div *ngIf="activeTab() === 'team-builder'" @tabContent class="team-builder-tab">
+      <app-team-builder></app-team-builder>
+    </div>
+
+    <!-- Teams Tab -->
+    <div *ngIf="activeTab() === 'teams'" @tabContent class="teams-page">
+      <section class="page-hero">
+        <div class="page-hero-bg"></div>
+        <div class="page-hero-content">
+          <span class="eyebrow">MY TEAMS</span>
+          <h1>Build. <em>Battle.</em> Win.</h1>
+          <p>Assemble squads of up to six Pokémon and track their combined power.</p>
+        </div>
+        <button type="button" class="create-team-btn primary hero-cta" (click)="openTeamModal()">+ Create New Team</button>
+      </section>
+      <div class="teams-container">
+      <div class="teams-header">
+        <h3 class="section-title">{{ teams().length }} Teams</h3>
+        <button type="button" class="link-btn" (click)="goToTeamBuilder()">Advanced Builder →</button>
+      </div>
+      <div class="teams-grid">
+        <div *ngFor="let team of teams()" class="team-card">
+          <div class="team-card-top">
+            <h3>{{ team.name }}</h3>
+            <span class="strategy-tag">{{ getTeamStrategy(team) }}</span>
+          </div>
+          <div class="team-sprites">
+            <img
+              *ngFor="let id of team.pokemon_ids.slice(0, 6)"
+              [src]="'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/' + id + '.png'"
+              alt="">
+            <span *ngFor="let _ of emptyTeamSlots(team)" class="sprite-placeholder"></span>
+          </div>
+          <div class="team-card-footer">
+            <div><span class="meta-label">Power</span><strong>{{ teamTotalStats(team) }}</strong></div>
+            <div><span class="meta-label">Members</span><strong>{{ team.pokemon_ids.length }}/6</strong></div>
+          </div>
+          <div class="team-card-actions">
+            <button type="button" class="view-team-btn" (click)="goToTeamBuilder()">Edit</button>
+            <button type="button" class="delete-team-btn" (click)="deleteTeam(team.id, $event)">Delete</button>
+          </div>
+        </div>
+        
+        <button type="button" class="team-card add-team-card" (click)="openTeamModal()">
+          <span class="add-icon">+</span>
+          <span>Add New Team</span>
+        </button>
+      </div>
+      <div *ngIf="!teams().length" class="empty-teams-hint">
+        No teams found for this trainer yet. Create your first team.
+      </div>
+      </div>
+    </div>
+    
+    <!-- Battles Tab -->
+    <div *ngIf="activeTab() === 'battles'" @tabContent class="battles-page">
+      <section class="page-hero">
+        <div class="page-hero-bg"></div>
+        <div class="page-hero-content">
+          <span class="eyebrow">BATTLE LOG</span>
+          <h1>Record. <em>Review.</em> Improve.</h1>
+          <p>Log battles, filter results, and watch the live feed from your mock GraphQL server.</p>
+        </div>
+      </section>
+      <div class="battles-container">
+      <div class="battles-header">
+        <h3 class="section-title">History</h3>
+        <select class="battle-filter" [ngModel]="battleFilter()" (ngModelChange)="battleFilter.set($event)">
+          <option value="all">All Battles</option>
+          <option value="win">Victories</option>
+          <option value="loss">Defeats</option>
+        </select>
+      </div>
+      
+      <div class="log-battle-form">
+        <h3>Log New Battle</h3>
+        <input type="text" placeholder="Opponent name" [ngModel]="battleOpponent()" (ngModelChange)="battleOpponent.set($event)">
+        <select [ngModel]="battleResult()" (ngModelChange)="battleResult.set($event)">
+          <option value="win">Win</option>
+          <option value="loss">Loss</option>
+        </select>
+        <select [ngModel]="battleTeamId()" (ngModelChange)="battleTeamId.set(+$event)">
+          <option *ngFor="let team of teams()" [value]="team.id">{{ team.name }}</option>
+        </select>
+        <button type="button" class="create-team-btn" (click)="logBattle()">Log Battle</button>
+      </div>
+
+      <div class="battles-table-wrap">
+        <table class="battles-table">
+          <thead>
+            <tr>
+              <th>Result</th>
+              <th>Opponent</th>
+              <th>Team</th>
+              <th>Type</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let battle of filteredBattles()">
+              <td>
+                <span class="result-pill" [class.victory]="battle.result === 'win'" [class.defeat]="battle.result === 'loss'">
+                  {{ battle.result === 'win' ? 'Victory' : 'Defeat' }}
+                </span>
+              </td>
+              <td class="opponent-cell">
+                <img [src]="getOpponentAvatar(battle.opponent_name)" alt="">
+                <span>{{ battle.opponent_name }}</span>
+              </td>
+              <td>{{ getTeamName(battle.team_id) }}</td>
+              <td><span class="battle-type-tag">{{ getBattleType(battle) }}</span></td>
+              <td class="date-cell">{{ formatRelativeTime(battle.date) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="section-title">Live Battle Feed</h3>
+      <p class="feed-note">
+        Polled once every 5 seconds via RxJS <code>interval(5000)</code> + <code>switchMap</code>
+        (no WebSocket on json-graphql-server).
+        <span *ngIf="lastBattleFeedPollAt()">Last check: {{ lastBattleFeedPollAt() | date:'mediumTime' }}</span>
+      </p>
+      <div class="battle-log glass">
+        <div *ngFor="let log of battleLogs()" class="log-entry" [class]="log.severity">
+          <span class="log-time">{{ log.timestamp | date:'short' }}</span>
+          <span class="log-message">{{ log.message }}</span>
+        </div>
+      </div>
+      </div>
+    </div>
+    
+    <!-- Profile Tab -->
+    <div *ngIf="activeTab() === 'profile'" @tabContent class="profile-page">
+      <section class="page-hero">
+        <div class="page-hero-bg"></div>
+        <div class="page-hero-content">
+          <span class="eyebrow">TRAINER PROFILE</span>
+          <h1>Your <em>Journey.</em></h1>
+          <p>Badges, stats, and profile details synced with the local GraphQL API.</p>
+        </div>
+      </section>
+      <div class="profile-container">
+      <div class="profile-hero" *ngIf="currentTrainer() as trainer">
+        <div class="profile-hero-main">
+          <img class="profile-avatar-lg" [src]="trainerAvatarUrl()" alt="Trainer">
+          <div class="profile-hero-info">
+            <h2>{{ profileName() || trainer.name }}</h2>
+            <p class="rank-line">{{ profileRank() || trainer.rank }}</p>
+            <p class="region-line">{{ profileRegion() || trainer.region }}</p>
+            <p class="trainer-id">Trainer ID #{{ trainer.id | number:'3.0-0' }}</p>
+            <button type="button" class="create-team-btn primary" (click)="profileEditing.set(!profileEditing())">
+              {{ profileEditing() ? 'Close' : 'Edit Profile' }}
+            </button>
+          </div>
+        </div>
+        <form class="profile-form" *ngIf="profileEditing()" (ngSubmit)="saveProfile()">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" [ngModel]="profileName()" (ngModelChange)="profileName.set($event)" name="profileName">
+          </div>
+          <div class="form-group">
+            <label>Region</label>
+            <input type="text" [ngModel]="profileRegion()" (ngModelChange)="profileRegion.set($event)" name="profileRegion">
+          </div>
+          <div class="form-group">
+            <label>Rank</label>
+            <input type="text" [ngModel]="profileRank()" (ngModelChange)="profileRank.set($event)" name="profileRank">
+          </div>
+          <div class="form-group">
+            <label>Avatar URL</label>
+            <input type="url" [ngModel]="profileAvatar()" (ngModelChange)="profileAvatar.set($event)" name="profileAvatar">
+          </div>
+          <div class="form-group">
+            <label>Upload Avatar</label>
+            <input type="file" accept="image/*" (change)="onAvatarFileSelected($event)">
+          </div>
+          <button type="submit" class="create-team-btn primary">Save Profile</button>
+        </form>
+      </div>
+
+      <section class="badges-section">
+        <h3>Gym Badges</h3>
+        <div class="badges-row">
+          <div *ngFor="let badge of gymBadges; let i = index" class="badge-item" [class.earned]="i < (currentTrainer()?.badge_count || 0)">
+            <span class="badge-icon">🏅</span>
+            <span>{{ badge }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="profile-stats-section">
+        <h3>Statistics</h3>
+        <div class="profile-stats-row">
+          <div class="profile-stat">
+            <span class="meta-label">Total Battles</span>
+            <strong>{{ battles().length }}</strong>
+          </div>
+          <div class="profile-stat">
+            <span class="meta-label">Wins</span>
+            <strong class="text-success">{{ totalWins() }}</strong>
+          </div>
+          <div class="profile-stat">
+            <span class="meta-label">Losses</span>
+            <strong class="text-danger">{{ totalLosses() }}</strong>
+          </div>
+          <div class="profile-stat">
+            <span class="meta-label">Win Rate</span>
+            <strong>{{ winRate() | number:'1.0-0' }}%</strong>
+          </div>
+        </div>
+      </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Team Builder Modal -->
+<app-team-builder-modal 
+  *ngIf="showTeamModal()"
+  [isOpen]="showTeamModal()"
+  [initialPokemonIds]="modalPreselectedIds()"
+  (closeModal)="closeTeamModal()"
+  (createTeam)="createTeam($event)">
+</app-team-builder-modal>
+
+<!-- Pokemon Detail Panel -->
+<app-pokemon-detail 
+  [pokemon]="selectedPokemon()"
+  [isOpen]="!!selectedPokemon()"
+  (closePanel)="closeDetail()">
+</app-pokemon-detail>
+
+<app-toast-container></app-toast-container>

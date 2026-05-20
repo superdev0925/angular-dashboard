@@ -1,0 +1,120 @@
+<div class="modal-overlay" [class.show]="isOpen" (click)="handleOverlayClick()">
+  <div class="modal-container" (click)="$event.stopPropagation()" [class.slide-up]="isOpen">
+    <div class="modal-header">
+      <h2>Create New Team</h2>
+      <button class="close-btn" (click)="handleClose()">✕</button>
+    </div>
+    
+    <div class="modal-body">
+      <form [formGroup]="teamForm" (ngSubmit)="handleSubmit()">
+        <!-- Team Name -->
+        <div class="form-group">
+          <label>Team Name <span class="required">*</span></label>
+          <input 
+            type="text" 
+            formControlName="teamName" 
+            placeholder="Enter team name (3-30 characters)"
+            [class.error]="teamForm.get('teamName')?.invalid && teamForm.get('teamName')?.touched"
+          >
+          <div class="error-messages" *ngIf="teamForm.get('teamName')?.touched">
+            <small *ngIf="teamForm.get('teamName')?.errors?.['required']">Team name is required</small>
+            <small *ngIf="teamForm.get('teamName')?.errors?.['minlength']">Team name must be at least 3 characters</small>
+            <small *ngIf="teamForm.get('teamName')?.errors?.['maxlength']">Team name cannot exceed 30 characters</small>
+            <small *ngIf="teamForm.get('teamName')?.errors?.['uniqueName']">Team name already exists</small>
+          </div>
+        </div>
+        
+        <!-- Pokémon Search -->
+        <div class="form-group">
+          <label>Add Pokémon <span class="required">*</span> ({{ selectedPokemon.length }}/6)</label>
+          <div class="search-container">
+            <input 
+              type="text" 
+              [(ngModel)]="searchTerm"
+              (ngModelChange)="onSearchChange($event)"
+              [ngModelOptions]="{standalone: true}"
+              placeholder="Search Pokémon by name..."
+              class="search-input"
+            >
+            <div class="autocomplete-dropdown" *ngIf="searchResults.length > 0 && searchTerm">
+              <div 
+                *ngFor="let pokemon of searchResults" 
+                class="autocomplete-item"
+                (click)="addPokemon(pokemon)"
+              >
+                <img [src]="pokemon.sprite" [alt]="pokemon.name" class="autocomplete-sprite">
+                <div class="autocomplete-info">
+                  <strong>{{ pokemon.name | titlecase }}</strong>
+                  <div class="pokemon-types">
+                    <span *ngFor="let type of pokemon.types" [class]="'type-badge type-' + type">
+                      {{ type }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Selected Pokémon Chips -->
+          <div class="selected-pokemon">
+            <div *ngFor="let pokemon of selectedPokemon; let i = index" class="pokemon-chip">
+              <img [src]="pokemon.sprite" [alt]="pokemon.name">
+              <span>{{ pokemon.name | titlecase }}</span>
+              <button type="button" class="remove-chip" (click)="removePokemon(i)">✕</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Pokémon Sub-forms -->
+        <div class="pokemon-subforms" formArrayName="pokemonArray">
+          <div *ngFor="let pokemonCtrl of pokemonArray.controls; let i = index" [formGroupName]="i" class="pokemon-subform">
+            <div class="subform-header">
+              <h4>{{ selectedPokemon[i].name | titlecase }}</h4>
+              <div class="pokemon-types">
+                <span *ngFor="let type of selectedPokemon[i].types" [class]="'type-badge type-' + type">
+                  {{ type }}
+                </span>
+              </div>
+            </div>
+            <div class="subform-content">
+              <div class="form-group">
+                <label>Nickname (optional)</label>
+                <input type="text" formControlName="nickname" placeholder="Enter a nickname">
+              </div>
+              <div class="form-group">
+                <label>Held Item</label>
+                <select formControlName="heldItem">
+                  <option value="">None</option>
+                  <option value="leftovers">Leftovers</option>
+                  <option value="choice-band">Choice Band</option>
+                  <option value="choice-specs">Choice Specs</option>
+                  <option value="choice-scarf">Choice Scarf</option>
+                  <option value="life-orb">Life Orb</option>
+                  <option value="focus-sash">Focus Sash</option>
+                  <option value="berry">Sitrus Berry</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Warning Banner -->
+        <div class="warning-banner" *ngIf="hasTypeWeaknessGap()">
+          <span class="warning-icon">⚠️</span>
+          <div class="warning-content">
+            <strong>Type Weakness Detected!</strong>
+            <p>Your team has a weakness gap against {{ weaknessTypes().join(', ') }} types.</p>
+          </div>
+        </div>
+        
+        <!-- Form Actions -->
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="handleClose()">Cancel</button>
+          <button type="submit" class="btn-primary" [disabled]="teamForm.invalid || selectedPokemon.length === 0 || selectedPokemon.length > 6">
+            Create Team
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
