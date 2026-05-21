@@ -1004,11 +1004,64 @@
     }
   }
   
-  .battle-log {
-    background: white;
-    border-radius: 16px;
+  .live-battle-feed {
+    margin-bottom: 24px;
     padding: 20px;
-    max-height: 500px;
+    border-radius: 16px;
+    border: 1px solid var(--glass-border);
+    background: var(--surface-card);
+
+    .live-feed-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+
+      h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        color: var(--text-heading);
+      }
+    }
+
+    .live-feed-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    .live-feed-note {
+      margin: 0 0 14px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+
+      code {
+        font-size: 11px;
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: var(--surface-deep);
+      }
+    }
+
+    .feed-empty {
+      margin: 0;
+      padding: 16px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+  }
+
+  .battle-log {
+    background: var(--surface-deep);
+    border-radius: 12px;
+    padding: 12px;
+    max-height: 320px;
     overflow-y: auto;
     
     .log-entry {
@@ -1017,31 +1070,38 @@
       border-radius: 10px;
       display: flex;
       gap: 16px;
+      flex-wrap: wrap;
       
       &.success {
-        background: #ECFDF5;
-        border-left: 3px solid #10B981;
+        background: var(--success-bg);
+        border-left: 3px solid var(--success-border);
       }
       
       &.info {
-        background: #EFF6FF;
-        border-left: 3px solid #3B82F6;
+        background: rgba(59, 130, 246, 0.12);
+        border-left: 3px solid #3b82f6;
       }
       
       &.danger {
-        background: #FEF2F2;
-        border-left: 3px solid #EF4444;
+        background: var(--danger-bg);
+        border-left: 3px solid var(--danger-border);
+      }
+
+      &.warning {
+        background: var(--warning-bg);
+        border-left: 3px solid var(--warning-border);
       }
       
       .log-time {
         font-size: 11px;
-        color: #64748B;
+        color: var(--text-muted);
         min-width: 140px;
       }
       
       .log-message {
+        flex: 1;
         font-size: 13px;
-        color: #334155;
+        color: var(--text-body);
       }
     }
   }
@@ -1971,7 +2031,8 @@
     object-fit: contain;
     z-index: 2;
     filter: drop-shadow(0 0 20px rgba(124, 58, 237, 0.5));
-    pointer-events: none;
+    cursor: pointer;
+    transition: transform 0.25s ease, filter 0.25s ease;
   }
 
   .pokedex-toolbar {
@@ -2240,6 +2301,10 @@
       th.col-view {
         cursor: default;
       }
+
+      th.col-name {
+        text-align: left;
+      }
     }
 
     tbody tr {
@@ -2287,15 +2352,20 @@
       min-width: 140px;
       font-weight: 600;
       vertical-align: middle;
+      text-align: left;
+    }
+
+    tbody td.col-name {
+      text-align: left;
     }
 
     .col-name-cell {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 10px;
       min-width: 0;
-      margin: 0 auto;
+      width: 100%;
 
       img {
         width: 36px;
@@ -2417,15 +2487,25 @@
     padding: 12px 0;
 
     button {
-      background: rgba(30, 41, 59, 0.8);
-      border: 1px solid rgba(148, 163, 184, 0.15);
-      color: #e2e8f0;
+      background: var(--pagination-btn-bg);
+      border: 1px solid var(--pagination-btn-border);
+      color: var(--pagination-btn-text);
       border-radius: 8px;
       padding: 6px 12px;
       cursor: pointer;
+      transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease;
 
       &:disabled {
         opacity: 0.4;
+      }
+
+      &:hover:not(:disabled):not(.active) {
+        background: var(--pagination-btn-hover-bg);
+        border-color: var(--pagination-btn-hover-border);
+        color: var(--pagination-btn-hover-text);
       }
     }
 
@@ -2433,8 +2513,9 @@
       min-width: 36px;
 
       &.active {
-        background: #7c3aed;
-        border-color: #7c3aed;
+        background: var(--pagination-btn-active-bg);
+        border-color: var(--pagination-btn-active-border);
+        color: var(--pagination-btn-active-text);
       }
     }
   }

@@ -153,6 +153,28 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
             </div>
           </div>
 
+          <section class="detail-section" *ngIf="abilityEntries().length">
+            <h3>Abilities</h3>
+            <ul class="tag-list">
+              <li *ngFor="let ability of abilityEntries()" class="detail-tag">
+                {{ ability.name | titlecase }}
+                <span *ngIf="ability.hidden" class="hidden-badge">Hidden</span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="detail-section" *ngIf="pokemon()?.moves?.length">
+            <h3>Moves</h3>
+            <ul class="tag-list moves-list">
+              <li *ngFor="let move of pokemon()!.moves!.slice(0, 12)" class="detail-tag">{{ move | titlecase }}</li>
+            </ul>
+          </section>
+
+          <section class="detail-section" *ngIf="pokemon()?.evolutionChain?.length">
+            <h3>Evolution Chain</h3>
+            <p class="evo-chain">{{ evolutionChainLabel() }}</p>
+          </section>
+
           <div class="info-section">
             <div class="info-card">
               <span class="info-label">Height</span>
@@ -491,6 +513,57 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
       color: var(--text-heading);
     }
 
+    .detail-section {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--modal-section-border);
+
+      h3 {
+        margin: 0 0 10px;
+        font-size: 0.95rem;
+        color: var(--modal-heading);
+      }
+    }
+
+    .tag-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .detail-tag {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--modal-section-bg);
+      border: 1px solid var(--modal-section-border);
+      font-size: 12px;
+      color: var(--text-body);
+      text-transform: capitalize;
+    }
+
+    .hidden-badge {
+      margin-left: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--primary);
+      text-transform: uppercase;
+    }
+
+    .moves-list {
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .evo-chain {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-body);
+    }
+
     .info-section {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -565,6 +638,26 @@ export class PokemonDetailComponent {
   );
 
   hasVideo = computed(() => this.videoKind() !== 'none');
+
+  /** Normalized ability rows for the detail panel. */
+  abilityEntries = computed((): { name: string; hidden: boolean }[] => {
+    const raw = this.pokemon()?.abilities;
+    if (!raw?.length) {
+      return [];
+    }
+    return raw.map((entry: { pokemon_v2_ability?: { name: string }; is_hidden?: boolean; name?: string }) => ({
+      name: entry.pokemon_v2_ability?.name ?? entry.name ?? 'unknown',
+      hidden: !!entry.is_hidden,
+    }));
+  });
+
+  /** Evolution chain as a readable arrow-separated label. */
+  evolutionChainLabel = computed(() =>
+    (this.pokemon()?.evolutionChain ?? [])
+      .map((s) => s.replace(/-/g, ' '))
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(' → ')
+  );
 
   spriteUrl = computed(() => {
     const p = this.pokemon();

@@ -136,6 +136,16 @@ html[data-theme='dark'] {
   --team-dialog-btn-cancel-bg: rgba(15, 23, 42, 0.8);
   --team-dialog-btn-cancel-hover-bg: rgba(51, 65, 85, 0.8);
   --team-dialog-remove-bg: rgba(30, 41, 59, 0.95);
+
+  --pagination-btn-bg: rgba(30, 41, 59, 0.8);
+  --pagination-btn-border: rgba(148, 163, 184, 0.15);
+  --pagination-btn-text: #e2e8f0;
+  --pagination-btn-hover-bg: rgba(51, 65, 85, 0.9);
+  --pagination-btn-hover-border: rgba(167, 139, 250, 0.35);
+  --pagination-btn-hover-text: #f8fafc;
+  --pagination-btn-active-bg: #7c3aed;
+  --pagination-btn-active-border: #7c3aed;
+  --pagination-btn-active-text: #ffffff;
 }
 
 html[data-theme='light'] {
@@ -274,4 +284,14 @@ html[data-theme='light'] {
   --team-dialog-btn-cancel-bg: #ffffff;
   --team-dialog-btn-cancel-hover-bg: #f1f5f9;
   --team-dialog-remove-bg: #ffffff;
+
+  --pagination-btn-bg: #ffffff;
+  --pagination-btn-border: #e2e8f0;
+  --pagination-btn-text: #334155;
+  --pagination-btn-hover-bg: #f8fafc;
+  --pagination-btn-hover-border: #cbd5e1;
+  --pagination-btn-hover-text: #0f172a;
+  --pagination-btn-active-bg: #7c3aed;
+  --pagination-btn-active-border: #7c3aed;
+  --pagination-btn-active-text: #ffffff;
 }

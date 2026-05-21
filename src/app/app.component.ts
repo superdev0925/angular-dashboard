@@ -237,6 +237,19 @@ export class AppComponent implements OnInit {
       });
     });
 
+    /**
+     * Starts simulated live battle-log polling while the Battles tab is active.
+     * json-graphql-server has no WebSocket subscriptions — interval(5000) + switchMap polls the API.
+     */
+    effect((onCleanup) => {
+      if (this.activeTab() !== 'battles') {
+        return;
+      }
+      this.trainerStore.resetBattleLogPollCursor();
+      const pollSub = this.trainerStore.pollBattleLogFeed(5000).subscribe();
+      onCleanup(() => pollSub.unsubscribe());
+    });
+
   }
 
   /** Switches tab and updates the URL route. */
@@ -290,6 +303,13 @@ export class AppComponent implements OnInit {
     };
     return subtitles[this.activeTab()] || '';
   }
+
+  /** Battle log entries newest-first for the live feed panel. */
+  sortedBattleLogs = computed(() =>
+    [...(this.battleLogs() ?? [])].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    )
+  );
 
   filteredBattles = computed(() => {
     const filter = this.battleFilter();
@@ -907,6 +927,20 @@ export class AppComponent implements OnInit {
 
   getBattleType(battle: Battle): string {
     return battle.result === 'win' ? 'Ranked' : 'Casual';
+  }
+
+  /**
+   * Formats a battle log timestamp for the live feed list.
+   *
+   * @param timestamp - ISO timestamp from the mock API
+   * @returns string - Locale date/time string
+   */
+  formatLogTime(timestamp: string): string {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+      return timestamp;
+    }
+    return date.toLocaleString();
   }
 
   formatRelativeTime(dateStr: string): string {

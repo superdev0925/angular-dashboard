@@ -257,7 +257,7 @@
             {{ showingFrom() }}–{{ showingTo() }} of {{ totalResults() }}
           </div>
           <button type="button" class="toolbar-add-team" *ngIf="selectedRowIds().size" (click)="addSelectedToTeam()">
-            + Team ({{ selectedRowIds().size }})
+            + Create Team ({{ selectedRowIds().size }})
           </button>
         </div>
         <div class="toolbar-row toolbar-row-secondary">
@@ -513,6 +513,31 @@
         </select>
         <button type="button" class="create-team-btn" (click)="logBattle()">Log Battle</button>
       </div>
+
+      <!-- Simulated subscription: interval(5000) + switchMap — no WebSocket on json-graphql-server -->
+      <section class="live-battle-feed glass" aria-label="Live battle log feed">
+        <div class="live-feed-header">
+          <h3>Live Battle Feed</h3>
+          <span class="live-feed-badge">Polling · 5s</span>
+        </div>
+        <p class="live-feed-note">
+          Updates via RxJS <code>interval(5000)</code> and <code>switchMap</code> polling
+          <code>battleLogs</code> on the local mock API (json-graphql-server does not support GraphQL subscriptions).
+        </p>
+        <div class="battle-log">
+          <div
+            *ngFor="let log of sortedBattleLogs()"
+            class="log-entry"
+            [class.success]="log.severity === 'success'"
+            [class.info]="log.severity === 'info'"
+            [class.danger]="log.severity === 'danger'"
+            [class.warning]="log.severity === 'warning'">
+            <time class="log-time">{{ formatLogTime(log.timestamp) }}</time>
+            <span class="log-message">{{ log.message }}</span>
+          </div>
+          <p *ngIf="!sortedBattleLogs().length" class="feed-empty">No battle log entries yet. Log a battle to see live feed messages.</p>
+        </div>
+      </section>
 
       <div class="battles-table-wrap">
         <table class="battles-table">

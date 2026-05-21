@@ -283,6 +283,12 @@ import { DEFAULT_TRAINER_AVATAR, resolveOpponentAvatarUrl } from '../../utils/av
       border: 1px solid var(--dash-border);
       border-radius: 12px;
       padding: 12px 16px;
+      cursor: pointer;
+      transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease,
+        border-color 0.2s ease,
+        background-color 0.2s ease;
     }
 
     .ring {
@@ -296,6 +302,7 @@ import { DEFAULT_TRAINER_AVATAR, resolveOpponentAvatarUrl } from '../../utils/av
       font-size: 14px;
       font-weight: 700;
       position: relative;
+      transition: transform 0.2s ease, filter 0.2s ease;
     }
 
     .ring.purple {
@@ -336,7 +343,30 @@ import { DEFAULT_TRAINER_AVATAR, resolveOpponentAvatarUrl } from '../../utils/av
       object-fit: contain;
       z-index: 2;
       filter: drop-shadow(0 0 24px rgba(124, 58, 237, 0.6));
-      pointer-events: none;
+      cursor: pointer;
+      transition: transform 0.25s ease, filter 0.25s ease;
+    }
+
+    @media (hover: hover) {
+      .ring-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 28px rgba(124, 58, 237, 0.22);
+        border-color: rgba(124, 58, 237, 0.45);
+      }
+
+      .ring-card:hover .ring {
+        transform: scale(1.06);
+        filter: brightness(1.08);
+      }
+
+      .ring-card:hover .ring-label {
+        color: var(--text-heading, #1e293b);
+      }
+
+      .hero-gengar:hover {
+        transform: translateY(-8px) scale(1.05);
+        filter: drop-shadow(0 12px 40px rgba(124, 58, 237, 0.75));
+      }
     }
 
     .stats-grid {
