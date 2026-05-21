@@ -167,7 +167,7 @@ Place captured UI images under `docs/screenshots/`:
 | **1** | PokéAPI queries (paginated list, detail by ID, types/matchups) | ✅ |
 | **1** | Local queries (trainer, teams, battles, battle logs) | ✅ |
 | **1** | Local mutations (team CRUD, log battle, update profile) | ✅ |
-| **1** | Simulated subscription — `interval(5000)` + `switchMap` poll on battle logs | ✅ |
+| **1** | Simulated subscription — `interval(5000)` + `switchMap` poll on battle logs (Battles tab live feed) | ✅ |
 | **2** | Custom RxJS stores (`BehaviorSubject`) | ✅ |
 | **2** | Selectors with `map`, `distinctUntilChanged`, `combineLatest` | ✅ |
 | **2** | Optimistic updates + rollback on team mutations | ✅ |
@@ -195,12 +195,12 @@ Place captured UI images under `docs/screenshots/`:
 
 | Bonus | Description | Status |
 |-------|-------------|--------|
-| **1** | Virtual scrolling Pokédex (`@angular/cdk/scrolling`, lazy batches of 20) | ✅ `/pokedex-virtual` |
-| **2** | Drag-and-drop team builder (reorder chips; drag rows to team queue) | ✅ |
-| **3** | Type effectiveness matrix directive `[appTypeHighlight]` | ✅ |
-| **4** | Web Worker for team coverage analysis | ✅ `stats-analysis.worker.ts` |
-| **5** | Micro-interactions (stagger, tab transitions, skeleton, pokeball loader, toasts, sprite bounce) | ✅ |
-| **6** | Offline Pokédex (IndexedDB cache + mutation queue + offline banner) | ✅ |
+| **1** | Virtual scrolling Pokédex — CDK virtual scroll, **lazy batches of 20**, skeleton shimmer cards | ✅ `/pokedex-virtual` |
+| **2** | Drag-and-drop team builder — drag table rows into **6 slots**, reorder, drag to trash to remove, live coverage | ✅ Pokédex tab queue |
+| **3** | `[appTypeHighlight]` directive — green/red row borders when type filter set (signal-based) | ✅ |
+| **4** | Web Worker — coverage + **synergy suggestions** from full catalog; `console.time` worker vs main thread | ✅ |
+| **5** | Micro-interactions — stagger rows, tab transitions, skeleton/pokeball loaders, toasts slide-in/out, sprite bounce | ✅ |
+| **6** | Offline — IndexedDB cache, offline banner, mutation queue with **last-write-wins** sync | ✅ |
 
 ---
 

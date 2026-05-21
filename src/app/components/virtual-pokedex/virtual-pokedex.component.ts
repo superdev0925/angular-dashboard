@@ -1,9 +1,12 @@
-import { Component, OnInit, signal, inject, ChangeDetectionStrategy, DestroyRef } from '@angular/core';
+import { Component, OnInit, signal, computed, inject, ChangeDetectionStrategy, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { PokemonStore, Pokemon } from '../../state/pokemon.store';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
+/**
+ * Bonus 1: Virtual scrolling Pokédex with lazy batches of 20 and skeleton cards.
+ */
 @Component({
   selector: 'app-virtual-pokedex',
   standalone: true,
@@ -12,25 +15,37 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
   template: `
     <div class="virtual-pokedex">
       <h2>Virtual Scrolling Pokédex</h2>
-      <p class="info">Full national dex ({{ virtualPokemon().length }} Pokémon) — virtual scroll for performance.</p>
-      
-      <cdk-virtual-scroll-viewport 
-        [itemSize]="280" 
-        [minBufferPx]="560" 
+      <p class="info" *ngIf="!showPrimaryLoading()">
+        Scroll to load Pokémon in batches of {{ batchSize }} ({{ loadedCount() }} loaded)
+      </p>
+
+      <div *ngIf="showPrimaryLoading()" class="catalog-loading loading" role="status" aria-live="polite">
+        <div class="pokeball" aria-hidden="true"></div>
+        <p>Loading Pokémon...</p>
+      </div>
+
+      <cdk-virtual-scroll-viewport
+        *ngIf="!showPrimaryLoading()"
+        [itemSize]="280"
+        [minBufferPx]="560"
         [maxBufferPx]="840"
         class="viewport"
         (scrolledIndexChange)="onScrollIndexChange($event)">
-        
-        <div *cdkVirtualFor="let pokemon of virtualPokemon(); let i = index; trackBy: trackByPokemonId" class="pokemon-card-container">
-          @if (isLoading() && !virtualPokemon().length) {
-            <div class="skeleton-card">
+        <div
+          *cdkVirtualFor="let pokemon of virtualPokemon(); let i = index; trackBy: trackByPokemon"
+          class="pokemon-card-container">
+          @if (!pokemon) {
+            <div class="skeleton-card" aria-hidden="true">
               <div class="skeleton-image shimmer"></div>
               <div class="skeleton-text shimmer"></div>
               <div class="skeleton-text-small shimmer"></div>
             </div>
           } @else {
-            <div class="pokemon-card" (click)="selectPokemon(pokemon)" [style.animation-delay]="(i * 0.05) + 's'">
-              <img [src]="getPokemonImage(pokemon)" [alt]="pokemon.name" class="pokemon-image">
+            <div
+              class="pokemon-card card-enter"
+              (click)="selectPokemon(pokemon)"
+              [style.animation-delay.ms]="(i % 20) * 50">
+              <img [src]="getPokemonImage(pokemon)" [alt]="pokemon.name" class="pokemon-image sprite-bounce">
               <h3>{{ pokemon.name | titlecase }}</h3>
               <div class="types">
                 <span *ngFor="let type of pokemon.types" [class]="'type-badge type-' + type.name">
@@ -46,6 +61,11 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           }
         </div>
       </cdk-virtual-scroll-viewport>
+
+      <div *ngIf="isLoadingMore() && loadedCount() > 0" class="loading-more loading" role="status">
+        <div class="pokeball pokeball-sm" aria-hidden="true"></div>
+        <p>Loading Pokémon...</p>
+      </div>
     </div>
   `,
   styles: [`
@@ -65,12 +85,53 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
     .info {
       color: var(--text-muted);
-      margin-bottom: 20px;
+      margin-bottom: 12px;
       font-size: 14px;
     }
 
+    .loading {
+      text-align: center;
+      padding: 60px 24px;
+      background: var(--surface-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 280px;
+
+      .pokeball {
+        width: 50px;
+        height: 50px;
+        border: 4px solid var(--surface-border);
+        border-top: 4px solid var(--primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+      }
+
+      .pokeball-sm {
+        width: 40px;
+        height: 40px;
+        border-width: 3px;
+        margin-bottom: 12px;
+      }
+
+      p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 15px;
+      }
+    }
+
+    .catalog-loading {
+      margin-bottom: 16px;
+    }
+
     .viewport {
-      height: calc(100vh - 120px);
+      height: calc(100vh - 140px);
       width: 100%;
     }
 
@@ -91,63 +152,37 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         box-shadow 0.3s ease,
         border-color 0.3s ease;
       box-shadow: var(--shadow);
+    }
+
+    .card-enter {
       animation: fadeInUp 0.4s ease-out backwards;
+    }
 
-      &:hover {
-        transform: translateY(-5px) scale(1.02);
-        border-color: var(--primary);
-        box-shadow: 0 8px 24px rgba(124, 58, 237, 0.25);
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
 
-        .pokemon-image {
-          transform: scale(1.1) rotate(5deg);
-        }
-      }
+    .pokemon-card:hover {
+      transform: translateY(-5px) scale(1.02);
+      border-color: var(--primary);
+      box-shadow: 0 8px 24px rgba(124, 58, 237, 0.25);
+    }
 
-      .pokemon-image {
-        width: 120px;
-        height: 120px;
-        transition: transform 0.3s ease;
-        image-rendering: pixelated;
-      }
+    .pokemon-card:hover .sprite-bounce {
+      animation: spriteBounce 0.45s ease;
+    }
 
-      h3 {
-        margin: 10px 0;
-        color: var(--text-heading);
-        text-transform: capitalize;
-      }
+    @keyframes spriteBounce {
+      0%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-8px) scale(1.08); }
+      70% { transform: translateY(-2px); }
+    }
 
-      .types {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 10px 0;
-
-        span {
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #fff;
-          text-transform: capitalize;
-        }
-      }
-
-      .stats {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 16px 24px;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-muted);
-        margin-top: 10px;
-      }
-
-      .stats span {
-        color: var(--accent);
-      }
+    .pokemon-image {
+      width: 120px;
+      height: 120px;
+      image-rendering: pixelated;
     }
 
     .skeleton-card {
@@ -155,35 +190,34 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       border: 1px solid var(--glass-border);
       border-radius: 12px;
       padding: 20px;
-      height: 280px;
+      min-height: 220px;
+    }
 
-      .skeleton-image {
-        width: 120px;
-        height: 120px;
-        border-radius: 50%;
-        background: var(--surface-deep);
-        margin: 0 auto;
-      }
+    .skeleton-image {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 16px;
+      border-radius: 12px;
+      background: var(--surface-deep);
+    }
 
-      .skeleton-text {
-        height: 20px;
-        background: var(--surface-deep);
-        margin: 15px auto;
-        width: 60%;
-        border-radius: 4px;
-      }
+    .skeleton-text {
+      height: 16px;
+      width: 70%;
+      margin: 0 auto 8px;
+      border-radius: 8px;
+      background: var(--surface-deep);
+    }
 
-      .skeleton-text-small {
-        height: 12px;
-        background: var(--surface-deep);
-        margin: 10px auto;
-        width: 40%;
-        border-radius: 4px;
-      }
+    .skeleton-text-small {
+      height: 12px;
+      width: 50%;
+      margin: 0 auto;
+      border-radius: 6px;
+      background: var(--surface-deep);
     }
 
     .shimmer {
-      animation: shimmer 1.5s infinite;
       background: linear-gradient(
         90deg,
         var(--surface-deep) 25%,
@@ -191,93 +225,128 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         var(--surface-deep) 75%
       );
       background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
     }
-    
+
     @keyframes shimmer {
       0% { background-position: 200% 0; }
       100% { background-position: -200% 0; }
     }
-    
-    /* Staggered Entry Animation */
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+
+    .loading-more {
+      margin-top: 12px;
+      padding: 32px 24px;
+      min-height: auto;
     }
-    
-    /* Type Badges */
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .types {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 8px 0;
+    }
+
+    .type-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      color: white;
+      text-transform: capitalize;
+    }
+
     .type-normal { background: #A8A878; }
     .type-fire { background: #F08030; }
     .type-water { background: #6890F0; }
-    .type-electric { background: #F8D030; }
     .type-grass { background: #78C850; }
-    .type-ice { background: #98D8D8; }
-    .type-fighting { background: #C03028; }
-    .type-poison { background: #A040A0; }
-    .type-ground { background: #E0C068; }
-    .type-flying { background: #A890F0; }
-    .type-psychic { background: #F85888; }
-    .type-bug { background: #A8B820; }
-    .type-rock { background: #B8A038; }
-    .type-ghost { background: #705898; }
-    .type-dragon { background: #7038F8; }
-    .type-dark { background: #705848; }
-    .type-steel { background: #B8B8D0; }
-    .type-fairy { background: #EE99AC; }
-  `]
+    .type-electric { background: #F8D030; color: #1e293b; }
+  `],
 })
 export class VirtualPokedexComponent implements OnInit {
   private pokemonStore = inject(PokemonStore);
   private destroyRef = inject(DestroyRef);
 
-  virtualPokemon = signal<Pokemon[]>([]);
-  isLoading = signal(false);
+  readonly batchSize = 20;
 
-  ngOnInit() {
-    this.pokemonStore.loading$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((loading) => this.isLoading.set(loading));
+  virtualPokemon = signal<(Pokemon | null)[]>([]);
+  isLoadingMore = signal(false);
+  loadedCount = signal(0);
+  private catalogComplete = false;
 
-    this.pokemonStore.pokemon$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((list) => this.virtualPokemon.set(list ?? []));
+  /** Centered pokeball loader for the first lazy batch. */
+  showPrimaryLoading = computed(() => this.loadedCount() === 0 && this.isLoadingMore());
 
-    if (!this.pokemonStore.getState().pokemon.length) {
-      this.pokemonStore
-        .fetchAllPokemon()
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe();
-    }
+  ngOnInit(): void {
+    this.loadNextBatch();
   }
 
   /**
-   * Scroll index hook for CDK virtual viewport (buffer tuning only).
-   * @param _index - Current scroll index
+   * Loads the next lazy batch of 20 Pokémon from PokéAPI into the virtual list.
    */
-  onScrollIndexChange(_index: number): void {
-    // Full catalog is loaded via PokemonStore.fetchAllPokemon().
+  loadNextBatch(): void {
+    if (this.isLoadingMore() || this.catalogComplete) {
+      return;
+    }
+    const offset = this.loadedCount();
+    this.isLoadingMore.set(true);
+    this.virtualPokemon.update((list) => [...list, ...Array(this.batchSize).fill(null)]);
+
+    this.pokemonStore
+      .fetchPokemon(this.batchSize, offset, { append: true, updateStore: false })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (batch) => {
+          this.virtualPokemon.update((list) => {
+            const updated = [...list];
+            for (let i = 0; i < batch.length; i++) {
+              updated[offset + i] = batch[i];
+            }
+            if (batch.length < this.batchSize) {
+              updated.length = offset + batch.length;
+            }
+            return updated;
+          });
+          this.loadedCount.set(offset + batch.length);
+          if (batch.length < this.batchSize) {
+            this.catalogComplete = true;
+          }
+          this.isLoadingMore.set(false);
+        },
+        error: () => {
+          this.virtualPokemon.update((list) => list.slice(0, offset));
+          this.isLoadingMore.set(false);
+        },
+      });
   }
-  
-  trackByPokemonId(_index: number, item: Pokemon): number {
-    return item.id;
+
+  /**
+   * Triggers lazy loading when the user scrolls near the end of the virtual list.
+   */
+  onScrollIndexChange(index: number): void {
+    const buffer = 8;
+    if (index + buffer >= this.loadedCount() - 1 && !this.catalogComplete) {
+      this.loadNextBatch();
+    }
   }
-  
+
+  trackByPokemon(index: number, pokemon: Pokemon | null): number {
+    return pokemon?.id ?? index;
+  }
+
+  selectPokemon(pokemon: Pokemon): void {
+    console.info('[virtual-pokedex] selected', pokemon.name);
+  }
+
   getPokemonImage(pokemon: Pokemon): string {
     return pokemon.sprites;
   }
-  
+
   getStat(pokemon: Pokemon, statName: string): number {
-    const stat = pokemon.stats.find(s => s.stat.name === statName);
+    const stat = pokemon.stats.find((s) => s.stat.name === statName);
     return stat?.base_stat || 0;
-  }
-  
-  selectPokemon(pokemon: Pokemon) {
-    console.log('Selected:', pokemon.name);
-    // Emit to parent component
   }
 }

@@ -56,14 +56,20 @@ interface PokemonData {
             </div>
             
             <div class="form-group">
-              <label>Select Pokémon ({{ selectedPokemon.length }}/6)</label>
+              <label>Select Pokémon ({{ selectedCount }}/6)</label>
               <div class="slot-grid">
                 <div
                   *ngFor="let slot of slots; let i = index"
                   class="slot-card"
-                  [class.filled]="selectedPokemon[i]"
-                  (click)="openSlotPicker(i)">
-                  <ng-container *ngIf="selectedPokemon[i] as pokemon; else emptySlot">
+                  [class.filled]="getSlotPokemon(i)"
+                  [class.picker-active]="activeSlotIndex === i"
+                  role="button"
+                  tabindex="0"
+                  [attr.aria-label]="getSlotPokemon(i) ? 'Change ' + getSlotPokemon(i)!.name : 'Add Pokémon to slot ' + (i + 1)"
+                  (click)="openSlotPicker(i)"
+                  (keydown.enter)="openSlotPicker(i)"
+                  (keydown.space)="openSlotPicker(i); $event.preventDefault()">
+                  <ng-container *ngIf="getSlotPokemon(i) as pokemon; else emptySlot">
                     <img [src]="pokemon.sprite" [alt]="pokemon.name">
                     <span>{{ pokemon.name | titlecase }}</span>
                     <button type="button" class="remove-slot" (click)="removePokemon(i); $event.stopPropagation()">✕</button>
@@ -74,27 +80,19 @@ interface PokemonData {
                   </ng-template>
                 </div>
               </div>
-              <select
-                #picker
-                class="pokemon-select hidden-picker"
-                [(ngModel)]="selectedPokemonId"
-                (ngModelChange)="onPokemonSelect($event)"
-                [ngModelOptions]="{ standalone: true }"
-                [disabled]="selectedPokemon.length >= 6 || loadingPokemon">
-                <option [ngValue]="''">{{ loadingPokemon ? 'Loading...' : 'Choose...' }}</option>
-                <option *ngFor="let pokemon of availablePokemon" [ngValue]="pokemon.id">
-                  {{ pokemon.name | titlecase }}
-                </option>
-              </select>
-
               <div class="picker-fallback">
+                <label class="picker-label" for="team-modal-pokemon-picker">
+                  {{ activeSlotIndex !== null ? 'Choose Pokémon for slot ' + (activeSlotIndex + 1) : 'Add Pokémon from list' }}
+                </label>
                 <select
+                  #visiblePicker
+                  id="team-modal-pokemon-picker"
                   class="pokemon-select"
                   [(ngModel)]="selectedPokemonId"
                   (ngModelChange)="onPokemonSelect($event)"
                   [ngModelOptions]="{ standalone: true }"
-                [disabled]="selectedPokemon.length >= 6 || loadingPokemon">
-                  <option [ngValue]="''">{{ loadingPokemon ? 'Loading...' : 'Add Pokémon from list' }}</option>
+                  [disabled]="(selectedCount >= 6 && activeSlotIndex === null) || loadingPokemon">
+                  <option [ngValue]="''">{{ loadingPokemon ? 'Loading Pokémon...' : 'Choose a Pokémon...' }}</option>
                   <option *ngFor="let pokemon of availablePokemon" [ngValue]="pokemon.id">
                     {{ pokemon.name | titlecase }}
                   </option>
@@ -104,7 +102,7 @@ interface PokemonData {
             
             <div class="form-actions">
               <button type="button" class="btn-cancel" (click)="handleClose()">Cancel</button>
-              <button type="submit" class="btn-create" [disabled]="teamForm.invalid || selectedPokemon.length === 0">
+              <button type="submit" class="btn-create" [disabled]="teamForm.invalid || selectedCount === 0">
                 {{ isEditMode() ? 'Save Changes' : 'Create Team' }}
               </button>
             </div>
@@ -295,6 +293,11 @@ interface PokemonData {
         color: var(--team-dialog-text);
       }
 
+      &.picker-active {
+        border-color: var(--primary, #7c3aed);
+        box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.25);
+      }
+
       img {
         width: 56px;
         height: 56px;
@@ -328,16 +331,15 @@ interface PokemonData {
       }
     }
 
-    .hidden-picker {
-      position: absolute;
-      opacity: 0;
-      pointer-events: none;
-      height: 0;
-      width: 0;
-    }
-
     .picker-fallback {
       margin-top: 12px;
+
+      .picker-label {
+        display: block;
+        font-size: 12px;
+        color: var(--team-dialog-muted);
+        margin-bottom: 6px;
+      }
     }
 
     .form-actions {
@@ -416,16 +418,30 @@ export class TeamBuilderModalComponent implements OnInit {
   allPokemonOptions: PokemonOption[] = [];
   selectedPokemonId: number | '' = '';
   loadingPokemon = false;
-  selectedPokemon: PokemonOption[] = [];
+  /** Sparse slots (index 0–5); undefined = empty slot. */
+  selectedPokemon: (PokemonOption | undefined)[] = [];
   existingTeams: Team[] = [];
   readonly slots = [0, 1, 2, 3, 4, 5];
   activeSlotIndex: number | null = null;
 
-  @ViewChild('picker') picker?: ElementRef<HTMLSelectElement>;
+  @ViewChild('visiblePicker') visiblePicker?: ElementRef<HTMLSelectElement>;
 
-  /** Pokémon not yet on the team, for the dropdown. */
+  get selectedCount(): number {
+    return this.selectedPokemon.filter((p): p is PokemonOption => !!p).length;
+  }
+
+  getSlotPokemon(index: number): PokemonOption | undefined {
+    return this.selectedPokemon[index];
+  }
+
+  /** Pokémon available in the dropdown (excludes other slots; active slot may be swapped). */
   get availablePokemon(): PokemonOption[] {
-    const selectedIds = new Set(this.selectedPokemon.map((p) => p.id));
+    const active = this.activeSlotIndex;
+    const selectedIds = new Set(
+      this.selectedPokemon
+        .map((p, i) => (i === active ? null : p?.id))
+        .filter((id): id is number => id != null)
+    );
     return this.allPokemonOptions.filter((p) => !selectedIds.has(p.id));
   }
   
@@ -458,17 +474,18 @@ export class TeamBuilderModalComponent implements OnInit {
       this.initForm();
     }
     this.teamForm.patchValue({ teamName: team.name });
-    this.selectedPokemon = team.pokemon_ids.slice(0, 6).map((id) => {
+    const slots: (PokemonOption | undefined)[] = [];
+    team.pokemon_ids.slice(0, 6).forEach((id, i) => {
       const found = this.allPokemonOptions.find((p) => p.id === id);
-      return (
+      slots[i] =
         found ?? {
           id,
           name: `pokemon-${id}`,
           types: [],
           sprite: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`,
-        }
-      );
+        };
     });
+    this.selectedPokemon = slots;
     this.cdr.markForCheck();
   }
 
@@ -478,10 +495,14 @@ export class TeamBuilderModalComponent implements OnInit {
     if (!ids?.length || !this.allPokemonOptions.length) {
       return;
     }
-    this.selectedPokemon = ids.slice(0, 6).flatMap((id) => {
+    const slots: (PokemonOption | undefined)[] = [];
+    ids.slice(0, 6).forEach((id, i) => {
       const pokemon = this.allPokemonOptions.find((p) => p.id === id);
-      return pokemon ? [pokemon] : [];
+      if (pokemon) {
+        slots[i] = pokemon;
+      }
     });
+    this.selectedPokemon = slots;
     this.cdr.markForCheck();
   }
   
@@ -528,18 +549,38 @@ export class TeamBuilderModalComponent implements OnInit {
   }
 
   /**
-   * Adds the Pokémon chosen from the select to the team.
+   * Opens the Pokémon select for a grid slot (Bonus 2 / create-team modal).
    */
   openSlotPicker(index: number): void {
-    if (this.selectedPokemon.length >= 6 && !this.selectedPokemon[index]) {
+    if (index < 0 || index > 5 || this.loadingPokemon) {
       return;
     }
-    if (index > this.selectedPokemon.length) {
+    const slotFilled = !!this.getSlotPokemon(index);
+    if (this.selectedCount >= 6 && !slotFilled) {
       return;
     }
     this.activeSlotIndex = index;
-    this.picker?.nativeElement?.focus();
-    this.picker?.nativeElement?.click();
+    this.selectedPokemonId = '';
+    this.cdr.markForCheck();
+    this.openPokemonSelect();
+  }
+
+  /** Opens the native / visible Pokémon dropdown. */
+  private openPokemonSelect(): void {
+    const el = this.visiblePicker?.nativeElement;
+    if (!el || el.disabled) {
+      return;
+    }
+    el.focus();
+    if (typeof el.showPicker === 'function') {
+      try {
+        el.showPicker();
+        return;
+      } catch {
+        // Safari or unsupported context — fall back to click
+      }
+    }
+    el.click();
   }
 
   onPokemonSelect(id: number | ''): void {
@@ -551,20 +592,30 @@ export class TeamBuilderModalComponent implements OnInit {
       return;
     }
     if (this.activeSlotIndex !== null) {
-      const copy = [...this.selectedPokemon];
-      if (this.activeSlotIndex < copy.length) {
-        copy[this.activeSlotIndex] = pokemon;
-      } else {
-        copy.push(pokemon);
-      }
-      this.selectedPokemon = copy.filter(
-        (p, i, arr) => arr.findIndex((x) => x.id === p.id) === i
-      );
+      this.setPokemonAtSlot(this.activeSlotIndex, pokemon);
     } else {
       this.addPokemon(pokemon);
     }
     this.activeSlotIndex = null;
     this.selectedPokemonId = '';
+    this.cdr.markForCheck();
+  }
+
+  private setPokemonAtSlot(index: number, pokemon: PokemonOption): void {
+    const copy = [...this.selectedPokemon];
+    while (copy.length <= index) {
+      copy.push(undefined);
+    }
+    for (let j = 0; j < copy.length; j++) {
+      if (j !== index && copy[j]?.id === pokemon.id) {
+        copy[j] = undefined;
+      }
+    }
+    copy[index] = pokemon;
+    while (copy.length > 0 && !copy[copy.length - 1]) {
+      copy.pop();
+    }
+    this.selectedPokemon = copy;
   }
 
   private mapToOptions(data: PokemonData[] | { id: number; name: string; types?: { name: string }[] }[]): PokemonOption[] {
@@ -578,22 +629,32 @@ export class TeamBuilderModalComponent implements OnInit {
   }
   
   addPokemon(pokemon: PokemonOption): void {
-    if (this.selectedPokemon.length >= 6) {
+    if (this.selectedCount >= 6) {
       alert('Maximum 6 Pokémon allowed!');
       return;
     }
-    
-    if (this.selectedPokemon.some(p => p.id === pokemon.id)) {
+
+    if (this.selectedPokemon.some((p) => p?.id === pokemon.id)) {
       alert('Pokémon already in team!');
       return;
     }
-    
-    this.selectedPokemon.push(pokemon);
+
+    const firstEmpty = this.slots.find((i) => !this.getSlotPokemon(i)) ?? this.selectedPokemon.length;
+    this.setPokemonAtSlot(firstEmpty, pokemon);
     this.selectedPokemonId = '';
   }
-  
+
   removePokemon(index: number): void {
-    this.selectedPokemon.splice(index, 1);
+    if (index < 0 || index >= this.selectedPokemon.length) {
+      return;
+    }
+    const copy = [...this.selectedPokemon];
+    copy[index] = undefined;
+    while (copy.length > 0 && !copy[copy.length - 1]) {
+      copy.pop();
+    }
+    this.selectedPokemon = copy;
+    this.cdr.markForCheck();
   }
   
   handleOverlayClick(): void {
@@ -611,16 +672,18 @@ export class TeamBuilderModalComponent implements OnInit {
       return;
     }
     
-    if (this.selectedPokemon.length === 0) {
+    if (this.selectedCount === 0) {
       alert('Add at least 1 Pokémon');
       return;
     }
-    
+
     const editing = this.editingTeam();
     const teamData = {
       id: editing?.id,
       name: this.teamForm.get('teamName')?.value,
-      pokemon_ids: this.selectedPokemon.map((p) => p.id),
+      pokemon_ids: this.slots
+        .map((i) => this.getSlotPokemon(i)?.id)
+        .filter((id): id is number => id != null),
     };
 
     this.saveTeam.emit(teamData);

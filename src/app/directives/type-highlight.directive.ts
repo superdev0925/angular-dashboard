@@ -1,9 +1,9 @@
-import { Directive, HostBinding, inject, input, effect } from '@angular/core';
+import { Directive, HostBinding, inject, input, effect, signal } from '@angular/core';
 import { PokemonSelectors } from '../state/pokemon.selectors';
 
 /**
- * Highlights Pokédex rows by type matchup when an attacking type filter is set.
- * Green = super effective, red = not very effective / weak matchup.
+ * Bonus 3: Highlights Pokédex rows by type matchup (signal-based).
+ * Green border = attacking type is super effective; red = weak matchup.
  */
 @Directive({
   selector: 'tr[appTypeHighlight]',
@@ -16,27 +16,27 @@ export class TypeHighlightDirective {
   defendingTypes = input<string[]>([]);
 
   private selectors = inject(PokemonSelectors);
-  private matchup: 'super' | 'weak' | 'neutral' = 'neutral';
+  private matchup = signal<'super' | 'weak' | 'neutral'>('neutral');
 
   constructor() {
     effect(() => {
       const attacker = this.appTypeHighlight();
       const defenders = this.defendingTypes();
       if (!attacker || !defenders?.length) {
-        this.matchup = 'neutral';
+        this.matchup.set('neutral');
         return;
       }
-      this.matchup = this.selectors.getMatchup(attacker, defenders);
+      this.matchup.set(this.selectors.getMatchup(attacker, defenders));
     });
   }
 
   @HostBinding('class.type-super-effective')
   get isSuperEffective(): boolean {
-    return this.matchup === 'super';
+    return this.matchup() === 'super';
   }
 
   @HostBinding('class.type-weak')
   get isWeak(): boolean {
-    return this.matchup === 'weak';
+    return this.matchup() === 'weak';
   }
 }

@@ -402,26 +402,209 @@
   }
 }
 
-/* Bonus 2: drag rows into team queue */
-.team-drop-zone {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
+/* Bonus 2: team builder drag-and-drop queue */
+.team-builder-queue {
   margin-bottom: 16px;
-  border: 2px dashed rgba(124, 58, 237, 0.45);
-  border-radius: 12px;
-  color: #cbd5e1;
-  font-size: 14px;
+  padding: 16px;
+  border: 2px dashed var(--primary);
+  border-radius: 14px;
+  background: var(--surface-card);
+
+  .queue-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+
+    p {
+      margin: 0;
+    }
+  }
 
   .drop-icon {
     font-size: 1.25rem;
-    color: #a78bfa;
+    color: var(--primary);
   }
 
-  p {
-    margin: 0;
+  .queue-slots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 88px;
+    padding: 8px;
+    border-radius: 10px;
+    background: var(--surface-deep);
+
+    &.cdk-drop-list-dragging .queue-slot:not(.cdk-drag-placeholder) {
+      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+    }
+  }
+
+  .queue-slot {
+    width: 100px;
+    min-height: 88px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 11px;
+    text-align: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    &.filled {
+      background: var(--surface-card);
+      border: 1px solid var(--glass-border);
+      cursor: grab;
+
+      .slot-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        width: 100%;
+      }
+
+      img {
+        image-rendering: pixelated;
+      }
+
+      &:hover {
+        border-color: var(--primary);
+      }
+    }
+
+    &.cdk-drag-preview {
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+      border-color: var(--primary);
+    }
+
+    &.cdk-drag-placeholder {
+      opacity: 0.35;
+      border: 2px dashed var(--primary);
+      background: transparent;
+    }
+
+    &.empty {
+      border: 1px dashed var(--glass-border);
+      color: var(--text-muted);
+
+      .slot-plus {
+        font-size: 1.5rem;
+        color: var(--primary);
+      }
+    }
+  }
+
+  @keyframes queueSlotIn {
+    from {
+      opacity: 0;
+      transform: scale(0.85);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .queue-remove {
+    border: none;
+    background: transparent;
+    color: var(--danger-text);
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .queue-trash {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px dashed var(--danger-border);
+    background: var(--danger-bg);
+    color: var(--danger-text);
+    font-size: 12px;
+    text-align: center;
+    min-height: 40px;
+
+    &.cdk-drop-list-receiving {
+      border-style: solid;
+      background: var(--danger-bg);
+      transform: scale(1.01);
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+  }
+
+  .queue-coverage {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(59, 130, 246, 0.1);
+    font-size: 12px;
+    color: var(--text-body);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .queue-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--glass-border);
+  }
+
+  .queue-create-team-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+
+    &.primary {
+      background: linear-gradient(135deg, var(--primary), #6366f1);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+    }
+
+    &:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(99, 102, 241, 0.45);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+  }
+
+  .queue-actions-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+}
+
+.type-highlight-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: -8px 0 12px;
+
+  .hint-super {
+    color: #22c55e;
+    font-weight: 600;
+  }
+
+  .hint-weak {
+    color: #ef4444;
+    font-weight: 600;
   }
 }
 
@@ -615,6 +798,13 @@
   p {
     color: var(--text-muted);
   }
+}
+
+.catalog-loading-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .loading-with-skeleton .skeleton-table {
@@ -1870,7 +2060,7 @@
 
     .sidebar-mini-stats {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 8px;
       margin: 12px 0;
       padding: 12px;
@@ -1945,16 +2135,25 @@
 
   .pokedex-hero-content {
     position: relative;
-    z-index: 1;
+    z-index: 2;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 28px 32px;
+    padding: 28px 32px 36px;
     gap: 24px;
     flex-wrap: wrap;
+    pointer-events: none;
+
+    > * {
+      pointer-events: auto;
+    }
   }
 
   .pokedex-hero-text {
+    position: relative;
+    z-index: 1;
+    max-width: 42%;
+
     .eyebrow {
       color: var(--accent);
       font-size: 12px;
@@ -1981,10 +2180,13 @@
   }
 
   .pokedex-overview-cards {
+    position: relative;
+    z-index: 1;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
     min-width: 280px;
+    flex-shrink: 0;
   }
 
   .overview-card {
@@ -2024,15 +2226,29 @@
 
   .pokedex-hero-gengar {
     position: absolute;
-    right: 20px;
-    bottom: -10px;
+    left: 50%;
+    bottom: 4px;
+    transform: translateX(-50%);
     width: 150px;
     height: 150px;
     object-fit: contain;
-    z-index: 2;
-    filter: drop-shadow(0 0 20px rgba(124, 58, 237, 0.5));
+    z-index: 1;
+    filter: drop-shadow(0 0 24px rgba(124, 58, 237, 0.45));
+    pointer-events: auto;
     cursor: pointer;
     transition: transform 0.25s ease, filter 0.25s ease;
+  }
+
+  @media (max-width: 900px) {
+    .pokedex-hero-text {
+      max-width: 100%;
+    }
+
+    .pokedex-hero-gengar {
+      width: 110px;
+      height: 110px;
+      opacity: 0.35;
+    }
   }
 
   .pokedex-toolbar {
@@ -2166,10 +2382,8 @@
     }
   }
 
-  .team-drop-zone {
-    color: var(--text-muted);
+  .team-builder-queue {
     border-color: var(--primary);
-    background: var(--surface-card);
   }
 
   .pokemon-grid {
@@ -2340,6 +2554,38 @@
 
     .col-drag {
       width: 36px;
+
+      .drag-handle {
+        cursor: grab;
+        color: var(--text-muted);
+        user-select: none;
+
+        &:active {
+          cursor: grabbing;
+        }
+      }
+    }
+
+    .pokedex-draggable-row.cdk-drag-preview .pokedex-drag-preview,
+    .pokedex-drag-preview {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      background: var(--surface-card);
+      border: 1px solid var(--primary);
+      border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+      font-weight: 600;
+      font-size: 13px;
+
+      img {
+        image-rendering: pixelated;
+      }
+    }
+
+    tbody.cdk-drop-list-dragging .pokedex-draggable-row:not(.cdk-drag-placeholder) {
+      transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
     }
 
     .col-id {
@@ -2372,6 +2618,11 @@
         height: 36px;
         flex-shrink: 0;
         image-rendering: pixelated;
+        transition: transform 0.2s ease;
+      }
+
+      &:hover img {
+        animation: spriteBounce 0.45s ease;
       }
 
       span {

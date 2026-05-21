@@ -60,11 +60,12 @@ export class MutationQueueService {
   }
 
   /**
-   * Flushes all pending mutations sequentially (last queued entry wins on conflict).
+   * Flushes pending mutations sequentially; duplicate updateTeam payloads for the same id
+   * keep only the newest entry (last-write-wins conflict resolution).
    */
   async flushAll(): Promise<number> {
     let synced = 0;
-    const queue = [...this.readQueue()];
+    const queue = this.dedupeConflicts([...this.readQueue()]);
     for (const item of queue) {
       try {
         await firstValueFrom(this.runMutation(item));
@@ -111,5 +112,31 @@ export class MutationQueueService {
 
   private remove(id: string): void {
     this.writeQueue(this.readQueue().filter((q) => q.id !== id));
+  }
+
+  /**
+   * Resolves offline queue conflicts by keeping the latest mutation per team/trainer id.
+   *
+   * @param queue - Raw queued mutations
+   * @returns QueuedMutation[] - Deduped queue
+   */
+  private dedupeConflicts(queue: QueuedMutation[]): QueuedMutation[] {
+    const latestByKey = new Map<string, QueuedMutation>();
+    const passthrough: QueuedMutation[] = [];
+    for (const item of queue) {
+      const teamId = item.payload['id'] as number | undefined;
+      const key =
+        item.type === 'updateTeam' && teamId != null
+          ? `updateTeam:${teamId}`
+          : item.type === 'updateTrainer' && teamId != null
+            ? `updateTrainer:${teamId}`
+            : item.id;
+      if (key.startsWith('update')) {
+        latestByKey.set(key, item);
+      } else {
+        passthrough.push(item);
+      }
+    }
+    return [...passthrough, ...latestByKey.values()].sort((a, b) => a.createdAt - b.createdAt);
   }
 }

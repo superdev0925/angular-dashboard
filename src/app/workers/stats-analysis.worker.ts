@@ -3,6 +3,7 @@
 export interface TeamCoverageInput {
   teamTypes: string[];
   allPokemonTypes: string[][];
+  catalog?: { id: number; name: string; types: string[] }[];
 }
 
 export interface TeamCoverageResult {
@@ -10,6 +11,7 @@ export interface TeamCoverageResult {
   resistedBy: string[];
   uncoveredTypes: string[];
   elapsedMs: number;
+  suggestions?: { id: number; name: string; types: string[]; score: number }[];
 }
 
 const TYPE_CHART: Record<string, Record<string, number>> = {
@@ -46,33 +48,80 @@ function teamMultiplierAgainst(teamTypes: string[], defenderType: string): numbe
   let best = 0;
   for (const atk of teamTypes) {
     const chart = TYPE_CHART[atk];
-    if (!chart) continue;
+    if (!chart) {
+      continue;
+    }
     const mult = chart[defenderType] ?? 1;
-    if (mult > best) best = mult;
+    if (mult > best) {
+      best = mult;
+    }
   }
   return best;
 }
 
-addEventListener('message', ({ data }: MessageEvent<TeamCoverageInput>) => {
-  const start = performance.now();
-  const teamTypes = [...new Set((data.teamTypes ?? []).map((t) => t.toLowerCase()))];
+/**
+ * Builds coverage summary and optional synergy picks from the full catalog.
+ *
+ * @param teamTypes - Current team typings
+ * @param catalog - National dex entries with type lists
+ * @returns TeamCoverageResult
+ */
+function analyzeCoverage(teamTypes: string[], catalog: TeamCoverageInput['catalog']): TeamCoverageResult {
+  const uniqueTeam = [...new Set(teamTypes.map((t) => t.toLowerCase()))];
   const superEffectiveAgainst: string[] = [];
   const resistedBy: string[] = [];
 
   for (const defender of ALL_TYPES) {
-    const mult = teamMultiplierAgainst(teamTypes, defender);
-    if (mult >= 2) superEffectiveAgainst.push(defender);
-    if (mult === 0 || mult < 1) resistedBy.push(defender);
+    const mult = teamMultiplierAgainst(uniqueTeam, defender);
+    if (mult >= 2) {
+      superEffectiveAgainst.push(defender);
+    }
+    if (mult === 0 || mult < 1) {
+      resistedBy.push(defender);
+    }
   }
 
   const uncoveredTypes = ALL_TYPES.filter((t) => !superEffectiveAgainst.includes(t));
 
-  const result: TeamCoverageResult = {
+  const suggestions: TeamCoverageResult['suggestions'] = [];
+  if (catalog?.length) {
+    const scored = catalog
+      .map((entry) => {
+        const types = entry.types.map((t) => t.toLowerCase());
+        let score = 0;
+        for (const gap of uncoveredTypes) {
+          if (teamMultiplierAgainst(types, gap) >= 2) {
+            score += 2;
+          } else if (teamMultiplierAgainst(types, gap) >= 1) {
+            score += 1;
+          }
+        }
+        for (const t of types) {
+          if (!uniqueTeam.includes(t)) {
+            score += 0.5;
+          }
+        }
+        return { id: entry.id, name: entry.name, types: entry.types, score };
+      })
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+    suggestions.push(...scored);
+  }
+
+  return {
     superEffectiveAgainst,
     resistedBy,
     uncoveredTypes: uncoveredTypes.slice(0, 8),
-    elapsedMs: performance.now() - start,
+    elapsedMs: 0,
+    suggestions,
   };
+}
 
+addEventListener('message', ({ data }: MessageEvent<TeamCoverageInput>) => {
+  const start = performance.now();
+  const teamTypes = (data.teamTypes ?? []).map((t) => t.toLowerCase());
+  const result = analyzeCoverage(teamTypes, data.catalog);
+  result.elapsedMs = performance.now() - start;
   postMessage(result);
 });

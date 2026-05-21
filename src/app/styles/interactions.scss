@@ -51,7 +51,7 @@
 
   .hero-gengar:hover,
   .pokedex-hero-gengar:hover {
-    transform: translateY(-6px) scale(1.04);
+    transform: translateX(-50%) translateY(-6px) scale(1.04);
     filter: drop-shadow(0 12px 36px rgba(124, 58, 237, 0.7));
   }
 

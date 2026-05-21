@@ -13,6 +13,9 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Pokemon } from '../../state/pokemon.store';
+import { buildStatMap } from '../../utils/pokemon-stats.util';
+import { ThemeService } from '../../services/theme.service';
+import { RadarChartComponent } from '../charts/radar-chart/radar-chart.component';
 
 /** Static map: Pokémon ID → YouTube video ID (embed) — first 20 species. */
 const POKEMON_VIDEO_MAP: Record<number, string> = {
@@ -42,7 +45,7 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
   selector: 'app-pokemon-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule],
+  imports: [CommonModule, RadarChartComponent],
   template: `
     <div class="detail-overlay" [class.open]="isOpen()" (click)="close()">
       <div class="detail-panel" [class.slide-in]="isOpen()" (click)="$event.stopPropagation()">
@@ -136,6 +139,17 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
                 </div>
               </div>
             </ng-template>
+          </section>
+
+          <section class="stats-chart-section" *ngIf="isOpen() && pokemon()">
+            <h3>Stat Chart</h3>
+            <div class="stats-chart-wrap">
+              <app-radar-chart
+                [stats]="radarStats()"
+                [pokemonName]="radarPokemonName()"
+                [dark]="themeService.isDark()"
+                [animate]="true" />
+            </div>
           </section>
 
           <div class="stats-section">
@@ -295,6 +309,23 @@ const POKEMON_VIDEO_MAP: Record<number, string> = {
     .cry-section,
     .media-section {
       margin: 16px 0;
+    }
+
+    .stats-chart-section {
+      margin-bottom: 24px;
+    }
+
+    .stats-chart-section h3 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+      color: var(--text-heading);
+    }
+
+    .stats-chart-wrap {
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--modal-section-bg, rgba(15, 23, 42, 0.04));
+      border: 1px solid var(--modal-section-border);
     }
 
     .stats-section {
@@ -615,6 +646,7 @@ export class PokemonDetailComponent {
   isOpen = input(false);
   closePanel = output<void>();
 
+  readonly themeService = inject(ThemeService);
   private sanitizer = inject(DomSanitizer);
   private destroyRef = inject(DestroyRef);
 
@@ -658,6 +690,21 @@ export class PokemonDetailComponent {
       .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
       .join(' → ')
   );
+
+  /** Six values for radar chart: HP, Atk, Def, SpA, SpD, Spe. */
+  radarStats = computed(() => {
+    const p = this.pokemon();
+    if (!p?.stats?.length) {
+      return [0, 0, 0, 0, 0, 0];
+    }
+    const m = buildStatMap(p.stats);
+    return [m.hp, m.attack, m.defense, m['special-attack'], m['special-defense'], m.speed];
+  });
+
+  radarPokemonName = computed(() => {
+    const name = this.pokemon()?.name ?? 'pokemon';
+    return name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ');
+  });
 
   spriteUrl = computed(() => {
     const p = this.pokemon();

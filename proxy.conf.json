@@ -1,0 +1,10 @@
+{
+  "/pokeapi-graphql": {
+    "target": "https://beta.pokeapi.co",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/pokeapi-graphql": "/graphql/v1beta"
+    }
+  }
+}

@@ -205,6 +205,10 @@ interface PokemonOption {
           <strong>Worker analysis ({{ cov.elapsedMs | number:'1.0-1' }}ms):</strong>
           <p>Super effective vs: {{ cov.superEffectiveAgainst.join(', ') || '—' }}</p>
           <p>Weak coverage: {{ cov.uncoveredTypes.join(', ') || '—' }}</p>
+          <p *ngIf="cov.suggestions?.length">
+            Synergy picks:
+            <span *ngFor="let s of cov.suggestions; let last = last">{{ s.name | titlecase }}<span *ngIf="!last">, </span></span>
+          </p>
         </div>
 
         <!-- Advisory: type coverage (does not block save) -->
@@ -741,8 +745,13 @@ export class TeamBuilderComponent implements OnInit {
         this.coverageResult.set(null);
         return;
       }
+      const catalog = this.allPokemon().map((p) => ({
+        id: p.id,
+        name: p.name,
+        types: p.types?.map((t) => t.name) ?? [],
+      }));
       this.statsAnalysis
-        .analyzeTeamCoverage(types)
+        .analyzeTeamCoverage(types, catalog)
         .pipe(take(1), takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (result) => this.coverageResult.set(result),

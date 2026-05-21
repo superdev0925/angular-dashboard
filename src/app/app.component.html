@@ -90,7 +90,6 @@
       </div>
       <div class="sidebar-mini-stats">
         <div><strong>{{ currentTrainer()?.badge_count ?? 0 }}</strong><span>Badges</span></div>
-        <div><strong>{{ pokemonList().length }}</strong><span>Pokémon</span></div>
         <div><strong>{{ battles().length }}</strong><span>Battles</span></div>
       </div>
       <button type="button" class="logout-btn" (click)="onLogout()">Logout</button>
@@ -192,7 +191,7 @@
     </div>
 
     <!-- Pokédex Tab -->
-    <div *ngIf="activeTab() === 'pokedex'" @tabContent class="pokedex-page">
+    <div *ngIf="activeTab() === 'pokedex'" @tabContent class="pokedex-page" cdkDropListGroup>
       <section class="pokedex-hero">
         <div class="pokedex-hero-bg"></div>
         <div class="pokedex-hero-content">
@@ -223,7 +222,8 @@
         <img
           class="pokedex-hero-gengar"
           src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png"
-          alt="Gengar"
+          alt=""
+          aria-hidden="true"
         />
       </section>
 
@@ -271,8 +271,8 @@
         </div>
       </div>
 
-      <!-- Loading -->
-      <div *ngIf="loading()" class="loading loading-with-skeleton">
+      <!-- Loading (initial fetch — list may still grow in the background) -->
+      <div *ngIf="loading() && pokemonList().length === 0" class="loading loading-with-skeleton">
         <div class="pokeball" aria-hidden="true"></div>
         <p>Loading Pokémon...</p>
         <div class="skeleton-table">
@@ -284,22 +284,75 @@
       </div>
       
       <!-- No Results -->
-      <div *ngIf="!loading() && totalResults() === 0" class="no-results">
-        <p>No Pokémon found. Try adjusting your search.</p>
+      <div *ngIf="!loading() && pokemonList().length === 0" class="no-results">
+        <p>No Pokémon found. Check that <code>ng serve</code> is running (proxy) and try refreshing.</p>
       </div>
+      <p *ngIf="catalogStillLoading()" class="catalog-loading-hint">
+        Loaded {{ pokemonList().length }} / ~{{ pokedexExpectedTotal }} Pokémon — still fetching full catalog…
+      </p>
 
-      <!-- Bonus 2: drop zone for dragging rows into the team builder queue -->
-      <div
-        class="team-drop-zone glass"
-        cdkDropList
-        (cdkDropListDropped)="onPokemonDroppedToTeam($event)">
-        <span class="drop-icon">⇅</span>
-        <p>KICK a Pokémon row here to queue it for the Team Builder (max 6).</p>
-        <small *ngIf="modalPreselectedIds().length">Queued IDs: {{ modalPreselectedIds().join(', ') }}</small>
+      <!-- Bonus 2: drag-and-drop team queue (max 6) with live type coverage (Bonus 4) -->
+      <div class="team-builder-queue glass">
+        <div class="queue-header">
+          <span class="drop-icon">⇅</span>
+          <p>Drag Pokémon rows into slots below, reorder, or drag to <strong>Remove</strong> (max 6).</p>
+        </div>
+        <div
+          id="teamQueueSlots"
+          class="queue-slots"
+          cdkDropList
+          cdkDropListOrientation="horizontal"
+          [cdkDropListData]="teamQueueSlots()"
+          (cdkDropListDropped)="onTeamQueueDrop($event)">
+          <div
+            *ngFor="let slotId of teamQueueSlots(); let i = index; trackBy: trackQueueSlot"
+            class="queue-slot"
+            [class.filled]="slotId !== null"
+            [class.empty]="slotId === null"
+            cdkDrag
+            [cdkDragDisabled]="slotId === null"
+            [cdkDragData]="slotId">
+            <ng-container *ngIf="slotId !== null && getQueuedPokemon(slotId) as mon">
+              <div class="slot-content" @queueSlot>
+                <img [src]="getPokemonSprite(mon)" [alt]="mon.name" width="32" height="32">
+                <span>{{ mon.name | titlecase }}</span>
+                <button type="button" class="queue-remove" (click)="removeFromTeamQueue(slotId, $event)" aria-label="Remove">✕</button>
+              </div>
+            </ng-container>
+            <span *ngIf="slotId === null" class="slot-plus">+</span>
+          </div>
+        </div>
+        <div
+          id="teamQueueTrash"
+          class="queue-trash"
+          cdkDropList
+          [cdkDropListData]="trashDropData"
+          (cdkDropListDropped)="onRemovedFromQueue($event)">
+          <span>🗑 Drag here to remove from queue</span>
+        </div>
+        <div class="queue-coverage" *ngIf="queueCoverage() as cov">
+          <strong>Live coverage (worker {{ cov.elapsedMs | number:'1.0-1' }}ms)</strong>
+          <span>SE: {{ cov.superEffectiveAgainst.slice(0, 5).join(', ') || '—' }}</span>
+          <span *ngIf="cov.suggestions?.length"> · Try: {{ cov.suggestions![0].name | titlecase }}</span>
+        </div>
+        <div class="queue-actions">
+          <button
+            type="button"
+            class="queue-create-team-btn primary"
+            [disabled]="modalPreselectedIds().length === 0"
+            (click)="createTeamFromQueue()">
+            + Create Team{{ modalPreselectedIds().length ? ' (' + modalPreselectedIds().length + '/6)' : '' }}
+          </button>
+          <span class="queue-actions-hint" *ngIf="modalPreselectedIds().length === 0">Add Pokémon to the queue first</span>
+        </div>
       </div>
+      <p class="type-highlight-hint" *ngIf="typeHighlightType()">
+        Row borders: <span class="hint-super">green</span> = {{ typeHighlightType() | titlecase }} is super effective,
+        <span class="hint-weak">red</span> = weak (Bonus 3).
+      </p>
 
       <!-- Pokémon Table -->
-      <div *ngIf="!loading() && totalResults() > 0" class="pokedex-table glass">
+      <div *ngIf="totalResults() > 0" class="pokedex-table glass">
         <div class="pokedex-table-scroll">
           <table class="pokedex-data-table">
             <colgroup>
@@ -344,11 +397,20 @@
                 <th class="col-view" scope="col">View</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody
+              id="pokedexDragSource"
+              cdkDropList
+              [cdkDropListData]="pokedexDragList()"
+              cdkDropListSortingDisabled>
               <ng-container *ngFor="let pokemon of paginatedPokemon(); let i = index; trackBy: trackByPokemonId">
                 <tr
                   *ngIf="getTableRowStats(pokemon) as s"
-                  class="stagger-row"
+                  appTypeHighlight
+                  [appTypeHighlight]="typeHighlightType()"
+                  [defendingTypes]="getDefendingTypeNames(pokemon)"
+                  cdkDrag
+                  [cdkDragData]="pokemon"
+                  class="stagger-row pokedex-draggable-row"
                   [style.animation-delay.ms]="i * 45"
                   (click)="selectPokemon(pokemon)"
                   [class.selected-row]="isRowSelected(pokemon.id)">
@@ -361,13 +423,8 @@
                         (click)="toggleRowSelection(pokemon.id, $event)">
                     </label>
                   </td>
-                  <td
-                    class="col-drag"
-                    cdkDrag
-                    cdkDragLockAxis="y"
-                    [cdkDragData]="pokemon"
-                    (click)="$event.stopPropagation()">
-                    <span class="drag-handle" title="Drag to team queue">⋮⋮</span>
+                  <td class="col-drag" (click)="$event.stopPropagation()">
+                    <span class="drag-handle" cdkDragHandle title="Drag to team queue">⋮⋮</span>
                   </td>
                   <td class="col-id">#{{ pokemon.id }}</td>
                   <td class="col-name">
@@ -402,6 +459,12 @@
                       View
                     </button>
                   </td>
+                  <ng-template *cdkDragPreview>
+                    <div class="pokedex-drag-preview">
+                      <img [src]="getPokemonSprite(pokemon)" [alt]="pokemon.name" width="32" height="32">
+                      <span>{{ pokemon.name | titlecase }}</span>
+                    </div>
+                  </ng-template>
                 </tr>
               </ng-container>
             </tbody>

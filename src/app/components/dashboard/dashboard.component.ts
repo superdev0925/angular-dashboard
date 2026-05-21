@@ -41,7 +41,8 @@ import { DEFAULT_TRAINER_AVATAR, resolveOpponentAvatarUrl } from '../../utils/av
         <img
           class="hero-gengar"
           src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png"
-          alt="Gengar"
+          alt=""
+          aria-hidden="true"
         />
       </section>
 
@@ -251,13 +252,24 @@ import { DEFAULT_TRAINER_AVATAR, resolveOpponentAvatarUrl } from '../../utils/av
 
     .hero-content {
       position: relative;
-      z-index: 1;
+      z-index: 2;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 28px 32px;
+      padding: 28px 32px 40px;
       gap: 24px;
       flex-wrap: wrap;
+      pointer-events: none;
+
+      > * {
+        pointer-events: auto;
+      }
+    }
+
+    .hero-text {
+      position: relative;
+      z-index: 1;
+      max-width: 45%;
     }
 
     .hero-text h1 {
@@ -273,8 +285,11 @@ import { DEFAULT_TRAINER_AVATAR, resolveOpponentAvatarUrl } from '../../utils/av
     }
 
     .hero-rings {
+      position: relative;
+      z-index: 1;
       display: flex;
       gap: 20px;
+      flex-shrink: 0;
     }
 
     .ring-card {
@@ -336,13 +351,14 @@ import { DEFAULT_TRAINER_AVATAR, resolveOpponentAvatarUrl } from '../../utils/av
 
     .hero-gengar {
       position: absolute;
-      right: 24px;
-      bottom: -8px;
-      width: 160px;
-      height: 160px;
+      left: 50%;
+      bottom: 4px;
+      transform: translateX(-50%);
+      width: 150px;
+      height: 150px;
       object-fit: contain;
-      z-index: 2;
-      filter: drop-shadow(0 0 24px rgba(124, 58, 237, 0.6));
+      z-index: 1;
+      filter: drop-shadow(0 0 24px rgba(124, 58, 237, 0.5));
       cursor: pointer;
       transition: transform 0.25s ease, filter 0.25s ease;
     }
@@ -364,8 +380,20 @@ import { DEFAULT_TRAINER_AVATAR, resolveOpponentAvatarUrl } from '../../utils/av
       }
 
       .hero-gengar:hover {
-        transform: translateY(-8px) scale(1.05);
+        transform: translateX(-50%) translateY(-8px) scale(1.05);
         filter: drop-shadow(0 12px 40px rgba(124, 58, 237, 0.75));
+      }
+    }
+
+    @media (max-width: 900px) {
+      .hero-text {
+        max-width: 100%;
+      }
+
+      .hero-gengar {
+        width: 110px;
+        height: 110px;
+        opacity: 0.35;
       }
     }
 
@@ -382,7 +410,7 @@ import { DEFAULT_TRAINER_AVATAR, resolveOpponentAvatarUrl } from '../../utils/av
 
     @media (max-width: 640px) {
       .stats-grid { grid-template-columns: 1fr; }
-      .hero-gengar { width: 110px; height: 110px; right: 8px; opacity: 0.85; }
+      .hero-gengar { width: 110px; height: 110px; opacity: 0.35; }
       .hero-rings { width: 100%; justify-content: center; }
       .badges-grid { grid-template-columns: repeat(3, 1fr); }
     }

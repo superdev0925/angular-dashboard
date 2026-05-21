@@ -1,10 +1,15 @@
 import { Component, OnInit, signal, model, computed, inject, ChangeDetectionStrategy, effect, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { DragDropModule, CdkDragDrop } from '@angular/cdk/drag-drop';
+import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { PokemonStore, Pokemon } from './state/pokemon.store';
+import {
+  PokemonStore,
+  Pokemon,
+  POKEDEX_FULL_CATALOG_MIN,
+  POKEDEX_EXPECTED_TOTAL,
+} from './state/pokemon.store';
 import { PokemonSelectors, PokemonFilter } from './state/pokemon.selectors';
 import { TrainerStore, Trainer, Team, Battle, BattleLog } from './state/trainer.store';
 import { TrainerSelectors } from './state/trainer.selectors';
@@ -17,7 +22,7 @@ import { ToastContainerComponent } from './components/toast-container/toast-cont
 import { VirtualPokedexComponent } from './components/virtual-pokedex/virtual-pokedex.component';
 import { ToastService } from './services/toast.service';
 import { OfflineService } from './services/offline.service';
-import { tabContentAnimation } from './animations/route.animations';
+import { tabContentAnimation, queueSlotAnimation } from './animations/route.animations';
 import {
   DEFAULT_TRAINER_AVATAR,
   resolveOpponentAvatarUrl,
@@ -31,15 +36,28 @@ import {
   getPokemonTotal,
 } from './utils/pokemon-stats.util';
 import { ThemeService, ThemeMode } from './services/theme.service';
+import { TypeHighlightDirective } from './directives/type-highlight.directive';
+import { StatsAnalysisService, CatalogEntry } from './services/stats-analysis.service';
+import { TeamCoverageResult } from './workers/stats-analysis.worker';
 
 @Component({
   selector: 'app-main',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, DragDropModule, TeamBuilderModalComponent, TeamBuilderComponent,
-    PokemonDetailComponent, DashboardComponent, ToastContainerComponent,
-    VirtualPokedexComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterModule,
+    DragDropModule,
+    TeamBuilderModalComponent,
+    TeamBuilderComponent,
+    PokemonDetailComponent,
+    DashboardComponent,
+    ToastContainerComponent,
+    VirtualPokedexComponent,
+    TypeHighlightDirective,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [tabContentAnimation],
+  animations: [tabContentAnimation, queueSlotAnimation],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss']
 })
@@ -49,6 +67,7 @@ export class AppComponent implements OnInit {
   private trainerStore = inject(TrainerStore);
   private trainerSelectors = inject(TrainerSelectors);
   private toastService = inject(ToastService);
+  private statsAnalysis = inject(StatsAnalysisService);
   readonly offlineService = inject(OfflineService);
   readonly themeService = inject(ThemeService);
 
@@ -101,7 +120,13 @@ export class AppComponent implements OnInit {
   /** Pokédex page size — 10 / 25 / 50 per spec. */
   itemsPerPage = model(25);
   selectedRowIds = signal<Set<number>>(new Set());
-  modalPreselectedIds = signal<number[]>([]);
+  /** Six-slot team queue for Bonus 2 drag-and-drop (null = empty slot). */
+  teamQueueSlots = signal<(number | null)[]>([null, null, null, null, null, null]);
+  /** Writable mirror of the current Pokédex page for CDK source list (copy, not move). */
+  pokedexDragList = signal<Pokemon[]>([]);
+  /** Drop target data for the remove zone (never mutated). */
+  readonly trashDropData: number[] = [];
+  queueCoverage = signal<TeamCoverageResult | null>(null);
   profileName = signal('');
   profileRegion = signal('');
   profileRank = signal('');
@@ -145,6 +170,11 @@ export class AppComponent implements OnInit {
     const end = start + this.itemsPerPage();
     return filtered.slice(start, end);
   });
+
+  /** Pokémon ids in the drag-and-drop queue (non-null slots). */
+  modalPreselectedIds = computed(() =>
+    this.teamQueueSlots().filter((id): id is number => id !== null)
+  );
 
   totalPages = computed(() => {
     const total = this.filteredPokemon().length;
@@ -201,9 +231,15 @@ export class AppComponent implements OnInit {
     return trainer?.id ? 70 + trainer.id * 8 : 78;
   });
 
-  pokedexCatalogTotal = computed(() => {
-    return this.pokemonList().length;
-  });
+  pokedexCatalogTotal = computed(() => this.pokemonList().length);
+
+  readonly pokedexExpectedTotal = POKEDEX_EXPECTED_TOTAL;
+
+  catalogStillLoading = computed(
+    () =>
+      this.pokemonList().length > 0 &&
+      this.pokemonList().length < POKEDEX_FULL_CATALOG_MIN
+  );
 
   featuredTypeIcons = computed(() => this.allTypes().slice(0, 4));
 
@@ -226,6 +262,32 @@ export class AppComponent implements OnInit {
       }
     });
 
+    /** Bonus 2 + 4: real-time team queue coverage via Web Worker when queue changes. */
+    effect(
+      (onCleanup) => {
+        const ids = this.modalPreselectedIds();
+        const types = ids.flatMap((id) => {
+          const p = this.pokemonList().find((x) => x.id === id);
+          return p?.types?.map((t) => t.name) ?? [];
+        });
+        if (!types.length) {
+          this.queueCoverage.set(null);
+          return;
+        }
+        const catalog: CatalogEntry[] = this.pokemonList().map((p) => ({
+          id: p.id,
+          name: p.name,
+          types: p.types?.map((t) => t.name) ?? [],
+        }));
+        const sub = this.statsAnalysis.analyzeTeamCoverage(types, catalog).subscribe({
+          next: (r) => this.queueCoverage.set(r),
+          error: () => this.queueCoverage.set(null),
+        });
+        onCleanup(() => sub.unsubscribe());
+      },
+      { allowSignalWrites: true }
+    );
+
     effect(() => {
       this.filter$.next({
         searchTerm: this.searchTerm(),
@@ -236,6 +298,14 @@ export class AppComponent implements OnInit {
         maxTotalStats: this.maxStats(),
       });
     });
+
+    /** Keeps CDK source list in sync with the visible Pokédex page. */
+    effect(
+      () => {
+        this.pokedexDragList.set([...this.paginatedPokemon()]);
+      },
+      { allowSignalWrites: true }
+    );
 
     /**
      * Starts simulated live battle-log polling while the Battles tab is active.
@@ -622,10 +692,23 @@ export class AppComponent implements OnInit {
   /** Team being edited in Advanced Builder (null = create new). */
   editingTeamId = signal<number | null>(null);
 
-  /** Opens create-team modal, optionally with pre-selected Pokémon from bulk action. */
-  openTeamModal(preselectedIds: number[] = []) {
+  /** Opens create-team modal; pass ids to pre-fill queue (bulk select). */
+  openTeamModal(preselectedIds?: number[]) {
     this.editingTeamForModal.set(null);
-    this.modalPreselectedIds.set(preselectedIds);
+    if (preselectedIds?.length) {
+      this.setTeamQueueFromIds(preselectedIds);
+    }
+    this.showTeamModal.set(true);
+  }
+
+  /** Opens the create-team modal with the current drag-and-drop queue (Bonus 2). */
+  createTeamFromQueue(): void {
+    const ids = this.modalPreselectedIds();
+    if (!ids.length) {
+      this.showToast('Drag at least one Pokémon into the queue', 'warning');
+      return;
+    }
+    this.editingTeamForModal.set(null);
     this.showTeamModal.set(true);
   }
 
@@ -633,14 +716,14 @@ export class AppComponent implements OnInit {
   openEditTeamModal(team: Team, event?: Event) {
     event?.stopPropagation();
     this.editingTeamForModal.set(team);
-    this.modalPreselectedIds.set([]);
+    this.clearTeamQueue();
     this.showTeamModal.set(true);
   }
 
   closeTeamModal() {
     this.showTeamModal.set(false);
     this.editingTeamForModal.set(null);
-    this.modalPreselectedIds.set([]);
+    this.clearTeamQueue();
   }
 
   toggleRowSelection(id: number, event: Event): void {
@@ -659,18 +742,145 @@ export class AppComponent implements OnInit {
   }
 
   /**
-   * Handles drag-and-drop from the Pokédex table into the team queue (Bonus 2).
-   *
-   * @param event - CDK drop event carrying Pokémon row data
+   * Pokémon queued for the team builder drop zone (Bonus 2).
    */
-  onPokemonDroppedToTeam(event: CdkDragDrop<Pokemon>): void {
-    const pokemon = event.item.data as Pokemon;
-    if (!pokemon?.id) {
+  queuedPokemon = computed(() =>
+    this.modalPreselectedIds()
+      .map((id) => this.pokemonList().find((p) => p.id === id))
+      .filter((p): p is Pokemon => !!p)
+  );
+
+  /**
+   * Attacking type for row highlight when a type filter is active (Bonus 3).
+   */
+  typeHighlightType = computed(() => this.typeFilter());
+
+  /**
+   * Returns defending type names for the type-highlight directive.
+   *
+   * @param pokemon - Table row Pokémon
+   * @returns string[] - Type names
+   */
+  getDefendingTypeNames(pokemon: Pokemon): string[] {
+    return pokemon.types?.map((t) => t.name) ?? [];
+  }
+
+  /**
+   * Resolves a queued Pokémon by id for the team builder drop zone.
+   *
+   * @param id - National dex id
+   * @returns Pokemon | undefined
+   */
+  getQueuedPokemon(id: number): Pokemon | undefined {
+    return this.pokemonList().find((p) => p.id === id);
+  }
+
+  /**
+   * trackBy for the six fixed team queue slots.
+   */
+  trackQueueSlot(index: number, slotId: number | null): string | number {
+    return slotId ?? `empty-${index}`;
+  }
+
+  /**
+   * Fills the six-slot queue from an ordered id list (used by modal / bulk actions).
+   */
+  setTeamQueueFromIds(ids: number[]): void {
+    const slots: (number | null)[] = Array(6).fill(null);
+    ids.slice(0, 6).forEach((id, i) => {
+      slots[i] = id;
+    });
+    this.teamQueueSlots.set(slots);
+  }
+
+  /** Clears all team queue slots. */
+  clearTeamQueue(): void {
+    this.teamQueueSlots.set([null, null, null, null, null, null]);
+  }
+
+  /**
+   * Handles drag-and-drop into the team queue (Bonus 2).
+   */
+  onTeamQueueDrop(event: CdkDragDrop<any>): void {
+    if (event.previousContainer.id === 'pokedexDragSource') {
+      this.restorePokedexDragItem(event);
+      const pokemon = event.item.data as Pokemon;
+      if (!pokemon?.id) {
+        return;
+      }
+      this.insertPokemonIntoTeamQueue(pokemon, event.currentIndex);
       return;
     }
-    const merged = [...new Set([...this.modalPreselectedIds(), pokemon.id])].slice(0, 6);
-    this.modalPreselectedIds.set(merged);
-    this.showToast(`${pokemon.name} queued for Team Builder`, 'success');
+
+    if (event.previousContainer === event.container) {
+      const slots = [...this.teamQueueSlots()];
+      moveItemInArray(slots, event.previousIndex, event.currentIndex);
+      this.teamQueueSlots.set(slots);
+    }
+  }
+
+  /**
+   * Restores a Pokédex row after CDK attempts to move it out of the source list.
+   */
+  private restorePokedexDragItem(event: CdkDragDrop<any>): void {
+    const list = [...(event.previousContainer.data as Pokemon[])];
+    const pokemon = event.item.data as Pokemon;
+    if (!pokemon?.id || list.some((p) => p.id === pokemon.id)) {
+      this.pokedexDragList.set(list);
+      return;
+    }
+    list.splice(Math.min(event.previousIndex, list.length), 0, pokemon);
+    this.pokedexDragList.set(list);
+  }
+
+  /**
+   * Inserts a Pokémon into the first available or targeted queue slot.
+   */
+  private insertPokemonIntoTeamQueue(pokemon: Pokemon, dropIndex: number): void {
+    const slots = [...this.teamQueueSlots()];
+    if (slots.includes(pokemon.id)) {
+      this.showToast('Already in team queue', 'warning');
+      return;
+    }
+    if (slots.every((s) => s !== null)) {
+      this.showToast('Team queue is full (6/6)', 'warning');
+      return;
+    }
+    const target = Math.min(Math.max(0, dropIndex), 5);
+    if (slots[target] === null) {
+      slots[target] = pokemon.id;
+    } else {
+      const empty = slots.indexOf(null);
+      if (empty === -1) {
+        this.showToast('Team queue is full (6/6)', 'warning');
+        return;
+      }
+      slots[empty] = pokemon.id;
+    }
+    this.teamQueueSlots.set(slots);
+    this.showToast(`${pokemon.name} added to team queue`, 'success');
+  }
+
+  /**
+   * Removes a Pokémon from the builder queue (Bonus 2 — click remove).
+   */
+  removeFromTeamQueue(id: number, event?: Event): void {
+    event?.stopPropagation();
+    this.teamQueueSlots.set(this.teamQueueSlots().map((s) => (s === id ? null : s)));
+  }
+
+  /**
+   * Drops a queued Pokémon onto the remove zone (Bonus 2).
+   */
+  onRemovedFromQueue(event: CdkDragDrop<any>): void {
+    if (event.previousContainer.id !== 'teamQueueSlots') {
+      return;
+    }
+    const id = event.item.data;
+    if (typeof id === 'number') {
+      this.removeFromTeamQueue(id);
+    }
+    this.trashDropData.length = 0;
   }
 
   addSelectedToTeam(): void {

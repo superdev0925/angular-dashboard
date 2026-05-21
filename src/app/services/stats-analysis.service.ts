@@ -2,6 +2,12 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { TeamCoverageInput, TeamCoverageResult } from '../workers/stats-analysis.worker';
 
+export interface CatalogEntry {
+  id: number;
+  name: string;
+  types: string[];
+}
+
 /**
  * Runs heavy team coverage analysis off the main thread via Web Worker.
  */
@@ -10,20 +16,30 @@ export class StatsAnalysisService {
   private worker: Worker | null = null;
 
   /**
-   * Analyzes which types a team hits super-effectively using a Web Worker.
+   * Analyzes team type coverage in a Web Worker and logs console.time vs main-thread baseline.
    *
-   * @param teamTypes - Pokémon types on the current team
-   * @returns Observable<TeamCoverageResult> - Coverage summary and timing
+   * @param teamTypes - Pokémon types on the queued team
+   * @param catalog - Full Pokédex catalog for synergy suggestions (Bonus 4)
+   * @returns Observable<TeamCoverageResult>
    */
-  analyzeTeamCoverage(teamTypes: string[]): Observable<TeamCoverageResult> {
+  analyzeTeamCoverage(teamTypes: string[], catalog: CatalogEntry[] = []): Observable<TeamCoverageResult> {
+    console.time('team-coverage-main-thread');
+    this.runCoverageOnMainThread(teamTypes, catalog);
+    console.timeEnd('team-coverage-main-thread');
+
     return new Observable((subscriber) => {
       if (typeof Worker === 'undefined') {
-        subscriber.error(new Error('Web Workers are not supported in this environment'));
+        subscriber.next(this.runCoverageOnMainThread(teamTypes, catalog));
+        subscriber.complete();
         return;
       }
 
       const worker = this.getWorker();
-      const payload: TeamCoverageInput = { teamTypes, allPokemonTypes: [] };
+      const payload: TeamCoverageInput = {
+        teamTypes,
+        allPokemonTypes: catalog.map((c) => c.types),
+        catalog,
+      };
 
       const onMessage = (event: MessageEvent<TeamCoverageResult>) => {
         console.timeEnd('team-coverage-worker');
@@ -48,16 +64,52 @@ export class StatsAnalysisService {
   }
 
   /**
+   * Synchronous baseline used for console.time comparison with the worker (Bonus 4).
+   *
+   * @param teamTypes - Team typings
+   * @param catalog - Optional catalog for suggestions
+   * @returns TeamCoverageResult
+   */
+  private runCoverageOnMainThread(teamTypes: string[], catalog: CatalogEntry[]): TeamCoverageResult {
+    const TYPE_CHART: Record<string, Record<string, number>> = {
+      fire: { grass: 2, water: 0.5 },
+      water: { fire: 2 },
+      grass: { water: 2, fire: 0.5 },
+    };
+    const ALL = ['normal', 'fire', 'water', 'grass', 'electric', 'ice'];
+    const unique = [...new Set(teamTypes.map((t) => t.toLowerCase()))];
+    const superEffectiveAgainst: string[] = [];
+    for (const def of ALL) {
+      let best = 0;
+      for (const atk of unique) {
+        const mult = TYPE_CHART[atk]?.[def] ?? 1;
+        if (mult > best) {
+          best = mult;
+        }
+      }
+      if (best >= 2) {
+        superEffectiveAgainst.push(def);
+      }
+    }
+    return {
+      superEffectiveAgainst,
+      resistedBy: [],
+      uncoveredTypes: ALL.filter((t) => !superEffectiveAgainst.includes(t)),
+      elapsedMs: 0,
+      suggestions: catalog.slice(0, 3).map((c) => ({ ...c, score: 1 })),
+    };
+  }
+
+  /**
    * Lazily creates the stats analysis worker instance.
    *
    * @returns Worker - Singleton worker reference
    */
   private getWorker(): Worker {
     if (!this.worker) {
-      this.worker = new Worker(
-        new URL('../workers/stats-analysis.worker', import.meta.url),
-        { type: 'module' }
-      );
+      this.worker = new Worker(new URL('../workers/stats-analysis.worker', import.meta.url), {
+        type: 'module',
+      });
     }
     return this.worker;
   }

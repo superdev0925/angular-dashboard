@@ -1,6 +1,17 @@
 import { Injectable, inject, DestroyRef } from '@angular/core';
-import { BehaviorSubject, Observable, throwError, of, from } from 'rxjs';
-import { map, catchError, retry, tap, debounceTime, distinctUntilChanged, shareReplay, switchMap, finalize } from 'rxjs/operators';
+import { BehaviorSubject, Observable, throwError, of, from, defer, firstValueFrom } from 'rxjs';
+import {
+  map,
+  catchError,
+  retry,
+  tap,
+  debounceTime,
+  distinctUntilChanged,
+  shareReplay,
+  switchMap,
+  finalize,
+  timeout,
+} from 'rxjs/operators';
 import { Apollo } from 'apollo-angular';
 import {
   GET_POKEMON,
@@ -34,9 +45,23 @@ export interface Pokemon {
 /** GraphQL page size when loading the full national dex catalog. */
 export const POKEMON_CATALOG_BATCH_SIZE = 100;
 
+/** Smaller pages for full-catalog sync (heavy query — avoids timeouts). */
+const CATALOG_FETCH_BATCH = 50;
+
+/** Pause between catalog pages to reduce PokéAPI rate-limit errors. */
+const CATALOG_PAGE_DELAY_MS = 300;
+
+/** Approximate national dex size (used for UI progress). */
+export const POKEDEX_EXPECTED_TOTAL = 1302;
+
+/** Minimum rows before treating the catalog as complete. */
+export const POKEDEX_FULL_CATALOG_MIN = 1200;
+
 export interface FetchPokemonOptions {
   /** When true, merge this page into the store instead of replacing the catalog. */
   append?: boolean;
+  /** When false, returns the page without updating global store (virtual scroll lazy load). */
+  updateStore?: boolean;
 }
 
 export interface PokemonState {
@@ -71,6 +96,8 @@ export class PokemonStore {
   private destroyRef = inject(DestroyRef);
   private pokemonCache = inject(PokemonCacheService);
   private state$ = new BehaviorSubject<PokemonState>(initialState);
+  /** Single in-flight full-catalog request (avoids parallel duplicate fetches). */
+  private catalogFetch$?: Observable<Pokemon[]>;
 
   // Public observables
   public pokemon$ = this.state$.pipe(map(state => state.pokemon));
@@ -94,14 +121,23 @@ export class PokemonStore {
     offset: number = 0,
     options?: FetchPokemonOptions
   ): Observable<Pokemon[]> {
-    this.setLoading(true);
+    const updateStore = options?.updateStore !== false;
+
+    if (updateStore) {
+      this.setLoading(true);
+    }
 
     if (!navigator.onLine) {
-      return this.fetchPokemonFromCache(limit, offset, options?.append).pipe(map((r) => r.page));
+      return this.fetchPokemonFromCache(limit, offset, options?.append, updateStore).pipe(
+        map((r) => r.page)
+      );
     }
 
     return this.queryPokemonPage(limit, offset).pipe(
       map((page) => {
+        if (!updateStore) {
+          return page;
+        }
         const catalog = options?.append
           ? this.mergePokemonLists(this.state$.value.pokemon, page)
           : page;
@@ -115,17 +151,31 @@ export class PokemonStore {
         return page;
       }),
       catchError((error) =>
-        this.fetchPokemonFromCache(limit, offset, options?.append).pipe(
+        this.fetchPokemonFromCache(limit, offset, options?.append, updateStore).pipe(
           switchMap((cached) => {
             if (cached.page.length) {
               return of(cached.page);
             }
-            this.setError(error.message);
+            if (updateStore) {
+              this.setError(error.message);
+            }
             return throwError(() => error);
           })
         )
       )
     );
+  }
+
+  /**
+   * Returns the complete national dex for search/filter UIs.
+   * Uses the store when already fully loaded; otherwise fetches every page from PokéAPI.
+   */
+  getFullCatalog(): Observable<Pokemon[]> {
+    return this.fetchAllPokemon();
+  }
+
+  isFullCatalogLoaded(): boolean {
+    return this.state$.value.pokemon.length >= POKEDEX_FULL_CATALOG_MIN;
   }
 
   /**
@@ -135,24 +185,32 @@ export class PokemonStore {
    * @returns Observable<Pokemon[]> - Complete merged catalog in the store
    */
   fetchAllPokemon(): Observable<Pokemon[]> {
-    this.setLoading(true);
+    const current = this.state$.value.pokemon;
+    if (current.length >= POKEDEX_FULL_CATALOG_MIN) {
+      return of(current);
+    }
+    if (this.catalogFetch$) {
+      return this.catalogFetch$;
+    }
 
     if (!navigator.onLine) {
       return this.loadFullCatalogFromCache();
     }
 
-    return this.fetchAllPokemonPages(POKEMON_CATALOG_BATCH_SIZE, 0, []).pipe(
+    this.setLoading(true);
+    this.catalogFetch$ = defer(() => from(this.loadAllPokemonCatalog())).pipe(
       tap((catalog) => {
         void this.pokemonCache.savePokemon(catalog);
         this.updateState({
           pokemon: catalog,
-          pagination: { limit: POKEMON_CATALOG_BATCH_SIZE, offset: 0, total: catalog.length },
+          pagination: { limit: CATALOG_FETCH_BATCH, offset: 0, total: catalog.length },
           loading: false,
           error: null,
         });
       }),
-      catchError((error) =>
-        this.loadFullCatalogFromCache().pipe(
+      catchError((error) => {
+        this.catalogFetch$ = undefined;
+        return this.loadFullCatalogFromCache().pipe(
           switchMap((cached) => {
             if (cached.length) {
               return of(cached);
@@ -160,34 +218,49 @@ export class PokemonStore {
             this.setError(error.message);
             return throwError(() => error);
           })
-        )
-      ),
-      finalize(() => this.setLoading(false))
+        );
+      }),
+      finalize(() => {
+        this.setLoading(false);
+        this.catalogFetch$ = undefined;
+      }),
+      shareReplay({ bufferSize: 1, refCount: false })
     );
+
+    return this.catalogFetch$;
   }
 
   /**
-   * Recursively fetches PokéAPI pages until fewer than `batchSize` rows are returned.
-   *
-   * @param batchSize - GraphQL limit per request
-   * @param offset - Current offset into the national dex
-   * @param accumulated - Pokémon merged so far
-   * @returns Observable<Pokemon[]> - Full catalog
+   * Sequentially loads every Pokédex page until a short page is returned (~1302 total).
    */
-  private fetchAllPokemonPages(
-    batchSize: number,
-    offset: number,
-    accumulated: Pokemon[]
-  ): Observable<Pokemon[]> {
-    return this.queryPokemonPage(batchSize, offset).pipe(
-      switchMap((page) => {
-        const merged = this.mergePokemonLists(accumulated, page);
-        if (page.length < batchSize) {
-          return of(merged);
-        }
-        return this.fetchAllPokemonPages(batchSize, offset + page.length, merged);
-      })
-    );
+  private async loadAllPokemonCatalog(): Promise<Pokemon[]> {
+    let merged: Pokemon[] = [];
+    let offset = 0;
+
+    for (;;) {
+      const page = await firstValueFrom(
+        this.queryPokemonPage(CATALOG_FETCH_BATCH, offset, 8).pipe(
+          timeout(120000)
+        )
+      );
+
+      merged = this.mergePokemonLists(merged, page);
+      void this.pokemonCache.savePokemon(merged);
+      this.updateState({
+        pokemon: merged,
+        pagination: { limit: CATALOG_FETCH_BATCH, offset: offset + page.length, total: merged.length },
+        loading: false,
+        error: null,
+      });
+      this.setLoading(false);
+
+      if (page.length < CATALOG_FETCH_BATCH) {
+        return merged;
+      }
+
+      offset += page.length;
+      await new Promise((resolve) => setTimeout(resolve, CATALOG_PAGE_DELAY_MS));
+    }
   }
 
   /**
@@ -197,14 +270,21 @@ export class PokemonStore {
    * @param offset - Page offset
    * @returns Observable<Pokemon[]> - Transformed page
    */
-  private queryPokemonPage(limit: number, offset: number): Observable<Pokemon[]> {
+  private queryPokemonPage(
+    limit: number,
+    offset: number,
+    maxRetries = 3
+  ): Observable<Pokemon[]> {
     return this.apollo.query<any>({
       query: GET_POKEMON,
       variables: { limit, offset },
       fetchPolicy: 'network-only',
     }).pipe(
-      retry({ count: 3, delay: 1000 }),
+      retry({ count: maxRetries, delay: 2000 }),
       map((result) => {
+        if (result.errors?.length) {
+          console.error('[PokemonStore] GET_POKEMON errors', result.errors);
+        }
         const raw = result?.data?.pokemon_v2_pokemon;
         return this.transformPokemonData(Array.isArray(raw) ? raw : []);
       })
@@ -263,7 +343,8 @@ export class PokemonStore {
   private fetchPokemonFromCache(
     limit: number,
     offset: number,
-    append?: boolean
+    append?: boolean,
+    updateStore = true
   ): Observable<{ page: Pokemon[]; catalog: Pokemon[] }> {
     return from(this.pokemonCache.loadPokemon()).pipe(
       map((all) => {
@@ -273,12 +354,14 @@ export class PokemonStore {
         }));
         const page = full.slice(offset, offset + limit);
         const catalog = append ? this.mergePokemonLists(this.state$.value.pokemon, page) : full;
-        this.updateState({
-          pokemon: catalog,
-          pagination: { limit, offset, total: catalog.length },
-          loading: false,
-          error: catalog.length ? null : 'No cached Pokémon available',
-        });
+        if (updateStore) {
+          this.updateState({
+            pokemon: catalog,
+            pagination: { limit, offset, total: catalog.length },
+            loading: false,
+            error: catalog.length ? null : 'No cached Pokémon available',
+          });
+        }
         return { page, catalog };
       })
     );
