@@ -794,7 +794,8 @@ export class DashboardComponent {
   }
 
   get pokemonRingPct(): number {
-    return Math.min(100, (this.pokemonCount() / 151) * 100);
+    const nationalDexTarget = 1025;
+    return Math.min(100, (this.pokemonCount() / nationalDexTarget) * 100);
   }
 
   get displayBattles(): number {

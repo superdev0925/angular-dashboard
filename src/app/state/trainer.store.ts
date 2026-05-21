@@ -356,11 +356,12 @@ export class TrainerStore {
       map((result) => {
         const updatedTeam = result?.data?.updateTeam;
         if (updatedTeam) {
-          const teams = (this.state$.value.teams || []).map(t =>
-            t.id === id ? updatedTeam : t
+          const normalized = this.normalizeTeam(updatedTeam);
+          const teams = (this.state$.value.teams || []).map((t) =>
+            t.id === id ? normalized : t
           );
           this.updateState({ teams });
-          return updatedTeam;
+          return normalized;
         }
         return optimisticTeams.find(t => t.id === id)!;
       }),

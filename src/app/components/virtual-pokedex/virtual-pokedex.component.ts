@@ -1,8 +1,7 @@
-import { Component, OnInit, signal, computed, inject, ChangeDetectionStrategy, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, OnInit, signal, inject, ChangeDetectionStrategy, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ScrollingModule, CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 import { PokemonStore, Pokemon } from '../../state/pokemon.store';
-import { Subject } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
@@ -13,7 +12,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
   template: `
     <div class="virtual-pokedex">
       <h2>Virtual Scrolling Pokédex</h2>
-      <p class="info">Scroll to load more Pokémon automatically!</p>
+      <p class="info">Full national dex ({{ virtualPokemon().length }} Pokémon) — virtual scroll for performance.</p>
       
       <cdk-virtual-scroll-viewport 
         [itemSize]="280" 
@@ -23,17 +22,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         (scrolledIndexChange)="onScrollIndexChange($event)">
         
         <div *cdkVirtualFor="let pokemon of virtualPokemon(); let i = index; trackBy: trackByPokemonId" class="pokemon-card-container">
-          <!-- Skeleton Loader -->
-          @if (isLoading() && !pokemon) {
+          @if (isLoading() && !virtualPokemon().length) {
             <div class="skeleton-card">
               <div class="skeleton-image shimmer"></div>
               <div class="skeleton-text shimmer"></div>
               <div class="skeleton-text-small shimmer"></div>
             </div>
-          }
-          
-          <!-- Actual Pokemon Card -->
-          @if (pokemon) {
+          } @else {
             <div class="pokemon-card" (click)="selectPokemon(pokemon)" [style.animation-delay]="(i * 0.05) + 's'">
               <img [src]="getPokemonImage(pokemon)" [alt]="pokemon.name" class="pokemon-image">
               <h3>{{ pokemon.name | titlecase }}</h3>
@@ -238,62 +233,38 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 })
 export class VirtualPokedexComponent implements OnInit {
   private pokemonStore = inject(PokemonStore);
-  
-  virtualPokemon = signal<(Pokemon | null)[]>([]);
+  private destroyRef = inject(DestroyRef);
+
+  virtualPokemon = signal<Pokemon[]>([]);
   isLoading = signal(false);
-  private loadedCount = 0;
-  private batchSize = 20;
-  private totalPokemon = 1000;
-  
+
   ngOnInit() {
-    this.loadBatch(0);
-  }
-  
-  /**
-   * Loads a batch of Pokémon when scrolling
-   * @param startIndex - Starting index for loading
-   */
-  loadBatch(startIndex: number) {
-    if (startIndex >= this.loadedCount && this.loadedCount < this.totalPokemon) {
-      this.isLoading.set(true);
-      
-      // Create skeleton placeholders
-      const newItems = Array(this.batchSize).fill(null);
-      this.virtualPokemon.update(current => [...current, ...newItems]);
-      
-      this.pokemonStore.fetchPokemon(this.batchSize, this.loadedCount).subscribe({
-        next: (pokemon) => {
-          this.virtualPokemon.update(current => {
-            const updated = [...current];
-            for (let i = 0; i < pokemon.length; i++) {
-              const index = this.loadedCount + i;
-              if (index < updated.length) {
-                updated[index] = pokemon[i];
-              }
-            }
-            return updated;
-          });
-          this.loadedCount += pokemon.length;
-          this.isLoading.set(false);
-        },
-        error: () => this.isLoading.set(false)
-      });
+    this.pokemonStore.loading$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((loading) => this.isLoading.set(loading));
+
+    this.pokemonStore.pokemon$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((list) => this.virtualPokemon.set(list ?? []));
+
+    if (!this.pokemonStore.getState().pokemon.length) {
+      this.pokemonStore
+        .fetchAllPokemon()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe();
     }
   }
-  
+
   /**
-   * Triggers when scroll index changes in virtual viewport
-   * @param index - Current scroll index
+   * Scroll index hook for CDK virtual viewport (buffer tuning only).
+   * @param _index - Current scroll index
    */
-  onScrollIndexChange(index: number) {
-    const buffer = 10;
-    if (index + buffer >= this.loadedCount) {
-      this.loadBatch(this.loadedCount);
-    }
+  onScrollIndexChange(_index: number): void {
+    // Full catalog is loaded via PokemonStore.fetchAllPokemon().
   }
   
-  trackByPokemonId(index: number, item: Pokemon | null): number {
-    return item?.id || index;
+  trackByPokemonId(_index: number, item: Pokemon): number {
+    return item.id;
   }
   
   getPokemonImage(pokemon: Pokemon): string {

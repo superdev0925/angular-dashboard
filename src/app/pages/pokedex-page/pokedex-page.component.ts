@@ -158,7 +158,10 @@ export class PokedexPageComponent implements OnInit {
   types = signal<any[]>([]);
   
   // Computed values
-  totalPages = computed(() => Math.ceil(1000 / 20));
+  totalPages = computed(() => {
+    const perPage = 20;
+    return Math.max(1, Math.ceil(this.filteredPokemon().length / perPage));
+  });
   filteredPokemon = signal<Pokemon[]>([]);
   
   private filterSubject = new BehaviorSubject<PokemonFilter>({
@@ -181,7 +184,7 @@ export class PokedexPageComponent implements OnInit {
   
   ngOnInit() {
     // Load Pokémon data
-    this.pokemonStore.fetchPokemon(20, 0).pipe(
+    this.pokemonStore.fetchAllPokemon().pipe(
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: () => this.loading.set(false),
@@ -254,19 +257,13 @@ export class PokedexPageComponent implements OnInit {
   
   previousPage() {
     if (this.currentPage() > 1) {
-      this.currentPage.update(page => page - 1);
-      const offset = (this.currentPage() - 1) * 20;
-      this.pokemonStore.fetchPokemon(20, offset).pipe(
-        takeUntilDestroyed(this.destroyRef)
-      ).subscribe();
+      this.currentPage.update((page) => page - 1);
     }
   }
-  
+
   nextPage() {
-    this.currentPage.update(page => page + 1);
-    const offset = (this.currentPage() - 1) * 20;
-    this.pokemonStore.fetchPokemon(20, offset).pipe(
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe();
+    if (this.currentPage() < this.totalPages()) {
+      this.currentPage.update((page) => page + 1);
+    }
   }
 }

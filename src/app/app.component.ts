@@ -106,6 +106,7 @@ export class AppComponent implements OnInit {
   profileRegion = signal('');
   profileRank = signal('');
   profileAvatar = signal('');
+  avatarFileName = signal('');
   private profileDraftDirty = signal(false);
   battleOpponent = signal('');
   battleFilter = signal<'all' | 'win' | 'loss'>('all');
@@ -182,7 +183,7 @@ export class AppComponent implements OnInit {
 
   dashboardChartPokemonId = signal(1);
 
-  chartPokemonOptions = computed(() => this.pokemonList().slice(0, 151));
+  chartPokemonOptions = computed(() => this.pokemonList());
 
   dashboardChartPokemon = computed(() => {
     const id = this.dashboardChartPokemonId();
@@ -240,6 +241,9 @@ export class AppComponent implements OnInit {
 
   /** Switches tab and updates the URL route. */
   setActiveTab(tab: 'dashboard' | 'pokedex' | 'pokedex-virtual' | 'teams' | 'battles' | 'profile' | 'team-builder') {
+    if (tab !== 'team-builder') {
+      this.editingTeamId.set(null);
+    }
     this.activeTab.set(tab);
     this.router.navigate(['/' + tab]);
   }
@@ -320,6 +324,13 @@ export class AppComponent implements OnInit {
       }
     });
 
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      const raw = params.get('teamId');
+      if (this.activeTab() === 'team-builder') {
+        this.editingTeamId.set(raw ? Number(raw) : null);
+      }
+    });
+
     this.offlineService.refreshPendingCount();
     fromEvent(window, 'online')
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -334,11 +345,12 @@ export class AppComponent implements OnInit {
         });
       });
 
-    this.loading.set(true);
-    
-    this.pokemonStore.pokemon$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(data => {
+    this.pokemonStore.loading$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((isLoading) => {
+      this.loading.set(isLoading);
+    });
+
+    this.pokemonStore.pokemon$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((data) => {
       this.pokemonList.set(data || []);
-      this.loading.set(false);
       const list = data ?? [];
       if (list.length && !list.some((p) => p.id === this.dashboardChartPokemonId())) {
         this.dashboardChartPokemonId.set(list[0].id);
@@ -371,14 +383,13 @@ export class AppComponent implements OnInit {
       this.battleLogs.set(data || []);
     });
     
-    this.pokemonStore.fetchPokemon(20, 0).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.pokemonStore.fetchAllPokemon().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (rows) => {
         if (!rows?.length) {
           this.showToast('No Pokémon returned from PokéAPI. Check your connection.', 'error');
         }
       },
       error: () => {
-        this.loading.set(false);
         this.showToast('Could not load Pokémon from PokéAPI.', 'error');
       },
     });
@@ -403,10 +414,34 @@ export class AppComponent implements OnInit {
   }
 
   /**
-   * Navigates to Team Builder page
+   * Opens Advanced Builder — create new, or edit when a team is passed.
    */
-  goToTeamBuilder() {
-    this.setActiveTab('team-builder');
+  goToTeamBuilder(team?: Team) {
+    const teamId = team?.id ?? null;
+    this.editingTeamId.set(teamId);
+    this.activeTab.set('team-builder');
+    this.router.navigate(
+      ['/team-builder'],
+      teamId != null ? { queryParams: { teamId } } : { queryParams: {} }
+    );
+  }
+
+  /** Quick edit: name + Pokémon via modal (stays on Teams page). */
+  editTeam(team: Team, event?: Event) {
+    this.openEditTeamModal(team, event);
+  }
+
+  onTeamBuilderSaved(_team: Team) {
+    this.editingTeamId.set(null);
+    this.trainerStore.fetchTeams(this.currentTrainerId()).subscribe((teams) => {
+      this.teams.set(teams);
+    });
+    this.setActiveTab('teams');
+  }
+
+  onTeamBuilderCancel() {
+    this.editingTeamId.set(null);
+    this.setActiveTab('teams');
   }
 
   /**
@@ -562,15 +597,29 @@ export class AppComponent implements OnInit {
   // Add these properties to the AppComponent class
   // Add these methods
   showTeamModal = signal(false);
+  /** Team being edited in the quick Edit modal (null = create new). */
+  editingTeamForModal = signal<Team | null>(null);
+  /** Team being edited in Advanced Builder (null = create new). */
+  editingTeamId = signal<number | null>(null);
 
   /** Opens create-team modal, optionally with pre-selected Pokémon from bulk action. */
   openTeamModal(preselectedIds: number[] = []) {
+    this.editingTeamForModal.set(null);
     this.modalPreselectedIds.set(preselectedIds);
+    this.showTeamModal.set(true);
+  }
+
+  /** Opens the Edit Team modal with the selected squad loaded. */
+  openEditTeamModal(team: Team, event?: Event) {
+    event?.stopPropagation();
+    this.editingTeamForModal.set(team);
+    this.modalPreselectedIds.set([]);
     this.showTeamModal.set(true);
   }
 
   closeTeamModal() {
     this.showTeamModal.set(false);
+    this.editingTeamForModal.set(null);
     this.modalPreselectedIds.set([]);
   }
 
@@ -642,6 +691,7 @@ export class AppComponent implements OnInit {
             });
           }
           this.profileDraftDirty.set(false);
+          this.avatarFileName.set('');
           this.showToast('Profile updated successfully!', 'success');
         },
         error: () => this.showToast('Failed to update profile. Is mock:graphql running?', 'error'),
@@ -667,17 +717,54 @@ export class AppComponent implements OnInit {
         return;
       }
       this.profileAvatar.set(result);
+      this.avatarFileName.set(file.name);
       this.profileDraftDirty.set(true);
       this.showToast('Avatar ready. Click Save Profile to apply.', 'info');
+      if (input) {
+        input.value = '';
+      }
     };
     reader.onerror = () => this.showToast('Failed to read image file', 'error');
     reader.readAsDataURL(file);
   }
 
-   createTeam(teamData: { name: string; pokemon_ids: number[] }) {
+  updateTeam(teamData: { id: number; name: string; pokemon_ids: number[] }) {
+    this.trainerStore
+      .updateTeam(teamData.id, teamData.name, teamData.pokemon_ids)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (updated) => {
+          this.closeTeamModal();
+          this.trainerStore.fetchTeams(this.currentTrainerId()).subscribe((teams) => {
+            this.teams.set(teams);
+          });
+          this.showToast(`Team "${updated.name}" updated successfully!`, 'success');
+        },
+        error: (error) => {
+          console.error('Error updating team:', error);
+          const msg = error?.message || error?.graphQLErrors?.[0]?.message;
+          this.showToast(
+            msg?.includes('Failed to fetch') || msg?.includes('Network')
+              ? 'Failed to update team. Start: npm run mock:graphql'
+              : `Failed to update team${msg ? ': ' + msg : ''}`,
+            'error'
+          );
+        },
+      });
+  }
+
+  onTeamModalSave(teamData: { id?: number; name: string; pokemon_ids: number[] }) {
+    if (teamData.id != null) {
+      this.updateTeam({ id: teamData.id, name: teamData.name, pokemon_ids: teamData.pokemon_ids });
+      return;
+    }
+    this.createTeam({ name: teamData.name, pokemon_ids: teamData.pokemon_ids });
+  }
+
+  createTeam(teamData: { name: string; pokemon_ids: number[] }) {
     this.trainerStore.createTeam(this.currentTrainerId(), teamData.name, teamData.pokemon_ids).subscribe({
       next: (newTeam) => {
-        this.showTeamModal.set(false);
+        this.closeTeamModal();
         this.trainerStore.fetchTeams(this.currentTrainerId()).subscribe((teams) => {
           this.teams.set(teams);
         });
@@ -750,18 +837,31 @@ export class AppComponent implements OnInit {
       });
   }
 
-  /** Deletes a team by id. */
-  deleteTeam(teamId: number, event: Event): void {
+  /** Team pending delete confirmation (null = modal closed). */
+  deleteConfirmTeam = signal<Team | null>(null);
+
+  /** Opens the delete confirmation modal. */
+  requestDeleteTeam(team: Team, event: Event): void {
     event.stopPropagation();
-    if (!confirm('Delete this team?')) {
+    this.deleteConfirmTeam.set(team);
+  }
+
+  cancelDeleteTeam(): void {
+    this.deleteConfirmTeam.set(null);
+  }
+
+  confirmDeleteTeam(): void {
+    const team = this.deleteConfirmTeam();
+    if (!team) {
       return;
     }
     this.trainerStore
-      .deleteTeam(teamId)
+      .deleteTeam(team.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          this.showToast('Team deleted', 'success');
+          this.deleteConfirmTeam.set(null);
+          this.showToast(`Team "${team.name}" deleted`, 'success');
           this.trainerStore.fetchTeams(this.currentTrainerId()).subscribe();
         },
         error: () => this.showToast('Failed to delete team', 'error'),

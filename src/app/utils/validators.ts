@@ -12,15 +12,21 @@ export function isValidEvTotal(hp: number, atk: number, def: number, spAtk: numb
 /**
  * Async validator ensuring team name is unique among existing team names (case-insensitive).
  */
-export function uniqueTeamNameValidator(getExistingNames: () => string[]): AsyncValidatorFn {
+export function uniqueTeamNameValidator(
+  getExistingNames: () => string[],
+  getExcludeName?: () => string | null | undefined
+): AsyncValidatorFn {
   return (control: AbstractControl): Observable<ValidationErrors | null> => {
     return of(control.value).pipe(
       debounceTime(500),
       distinctUntilChanged(),
       switchMap((name: string) => {
-        const exists = getExistingNames().some(
-          (existing) => existing.toLowerCase() === (name ?? '').toLowerCase()
-        );
+        const normalized = (name ?? '').trim().toLowerCase();
+        const exclude = (getExcludeName?.() ?? '').trim().toLowerCase();
+        const exists = getExistingNames().some((existing) => {
+          const existingNorm = existing.trim().toLowerCase();
+          return existingNorm === normalized && existingNorm !== exclude;
+        });
         return of(exists ? { uniqueName: true } : null);
       })
     );

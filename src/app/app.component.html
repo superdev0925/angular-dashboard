@@ -423,7 +423,12 @@
     
     <!-- Team Builder Tab -->
     <div *ngIf="activeTab() === 'team-builder'" @tabContent class="team-builder-tab">
-      <app-team-builder></app-team-builder>
+      <app-team-builder
+        [teamId]="editingTeamId()"
+        [trainerId]="currentTrainerId()"
+        (teamSaved)="onTeamBuilderSaved($event)"
+        (cancelEdit)="onTeamBuilderCancel()">
+      </app-team-builder>
     </div>
 
     <!-- Teams Tab -->
@@ -460,8 +465,8 @@
             <div><span class="meta-label">Members</span><strong>{{ team.pokemon_ids.length }}/6</strong></div>
           </div>
           <div class="team-card-actions">
-            <button type="button" class="view-team-btn" (click)="goToTeamBuilder()">Edit</button>
-            <button type="button" class="delete-team-btn" (click)="deleteTeam(team.id, $event)">Delete</button>
+            <button type="button" class="view-team-btn" (click)="editTeam(team, $event)">Edit</button>
+            <button type="button" class="delete-team-btn" (click)="requestDeleteTeam(team, $event)">Delete</button>
           </div>
         </div>
         
@@ -581,13 +586,32 @@
             <label>Rank</label>
             <input type="text" [ngModel]="profileRank()" (ngModelChange)="profileRank.set($event)" name="profileRank">
           </div>
-          <div class="form-group">
-            <label>Avatar URL</label>
-            <input type="url" [ngModel]="profileAvatar()" (ngModelChange)="profileAvatar.set($event)" name="profileAvatar">
-          </div>
-          <div class="form-group">
-            <label>Upload Avatar</label>
-            <input type="file" accept="image/*" (change)="onAvatarFileSelected($event)">
+          <div class="form-group avatar-upload-group">
+            <label>Profile photo</label>
+            <div class="avatar-upload-panel">
+              <img
+                class="avatar-upload-preview"
+                [src]="trainerAvatarUrl()"
+                alt="Avatar preview"
+                (error)="onTrainerAvatarError($event)">
+              <div class="avatar-upload-actions">
+                <label class="avatar-upload-btn">
+                  <input
+                    type="file"
+                    class="avatar-upload-input"
+                    accept="image/*"
+                    (change)="onAvatarFileSelected($event)">
+                  <span class="avatar-upload-btn-icon" aria-hidden="true">↑</span>
+                  <span>Upload avatar</span>
+                </label>
+                <p class="avatar-upload-hint" *ngIf="avatarFileName(); else avatarHintDefault">
+                  Selected: <strong>{{ avatarFileName() }}</strong> — click Save Profile to apply.
+                </p>
+                <ng-template #avatarHintDefault>
+                  <p class="avatar-upload-hint">JPG, PNG, or GIF. Changes apply after you save.</p>
+                </ng-template>
+              </div>
+            </div>
           </div>
           <button type="submit" class="create-team-btn primary">Save Profile</button>
         </form>
@@ -629,13 +653,39 @@
   </main>
 </div>
 
+<!-- Delete team confirmation -->
+<div
+  class="confirm-modal-overlay"
+  *ngIf="deleteConfirmTeam() as team"
+  (click)="cancelDeleteTeam()"
+  role="presentation">
+  <div
+    class="confirm-modal"
+    role="alertdialog"
+    aria-labelledby="delete-team-title"
+    aria-describedby="delete-team-desc"
+    (click)="$event.stopPropagation()">
+    <div class="confirm-modal-icon" aria-hidden="true">⚠️</div>
+    <h2 id="delete-team-title">Delete team?</h2>
+    <p id="delete-team-desc">
+      Are you sure you want to delete <strong>{{ team.name }}</strong>?
+      This removes {{ team.pokemon_ids.length }} Pokémon from the squad. This action cannot be undone.
+    </p>
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn-cancel" (click)="cancelDeleteTeam()">Cancel</button>
+      <button type="button" class="btn-danger" (click)="confirmDeleteTeam()">Delete team</button>
+    </div>
+  </div>
+</div>
+
 <!-- Team Builder Modal -->
 <app-team-builder-modal 
   *ngIf="showTeamModal()"
   [isOpen]="showTeamModal()"
+  [editingTeam]="editingTeamForModal()"
   [initialPokemonIds]="modalPreselectedIds()"
   (closeModal)="closeTeamModal()"
-  (createTeam)="createTeam($event)">
+  (saveTeam)="onTeamModalSave($event)">
 </app-team-builder-modal>
 
 <!-- Pokemon Detail Panel -->

@@ -1112,6 +1112,101 @@
     .form-group label {
       color: var(--text-muted);
     }
+
+    .avatar-upload-group {
+      max-width: 100%;
+    }
+
+    .avatar-upload-panel {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px;
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      background: var(--surface-deep);
+    }
+
+    .avatar-upload-preview {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: 3px solid var(--primary);
+      object-fit: cover;
+      flex-shrink: 0;
+      background: var(--surface-card);
+    }
+
+    .avatar-upload-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .avatar-upload-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      border: 1px solid var(--primary);
+      background: var(--primary-light);
+      color: var(--primary-dark, var(--primary));
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      overflow: hidden;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+
+      &:hover {
+        background: var(--primary);
+        color: #fff;
+        box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+        transform: translateY(-1px);
+
+        .avatar-upload-btn-icon {
+          color: #fff;
+        }
+      }
+    }
+
+    .avatar-upload-input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .avatar-upload-btn-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background: rgba(124, 58, 237, 0.15);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .avatar-upload-hint {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--text-subtle);
+
+      strong {
+        color: var(--text-body);
+        font-weight: 600;
+      }
+    }
   }
 
   .badges-section,
@@ -2566,6 +2661,95 @@ tr.type-weak {
 
   &:hover {
     filter: brightness(1.08);
+  }
+}
+
+.confirm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.confirm-modal {
+  width: 100%;
+  max-width: 420px;
+  padding: 28px 24px 24px;
+  border-radius: 16px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow);
+  color: var(--text-body);
+  text-align: center;
+}
+
+.confirm-modal-icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+
+.confirm-modal h2 {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.confirm-modal p {
+  margin: 0 0 24px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+
+  strong {
+    color: var(--text-heading);
+  }
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.confirm-modal .btn-cancel {
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-deep);
+  color: var(--text-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+
+  &:hover {
+    border-color: var(--primary);
+    background: var(--primary-light);
+  }
+}
+
+.confirm-modal .btn-danger {
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.2s, box-shadow 0.2s;
+
+  &:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25);
   }
 }
 

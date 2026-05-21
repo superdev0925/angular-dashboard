@@ -1,15 +1,34 @@
-import { Component, OnInit, signal, output, inject, ChangeDetectionStrategy, DestroyRef, effect, computed } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  signal,
+  input,
+  output,
+  inject,
+  ChangeDetectionStrategy,
+  DestroyRef,
+  effect,
+  computed,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
-import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormArray, Validators, AbstractControl } from '@angular/forms';
+import {
+  FormsModule,
+  ReactiveFormsModule,
+  FormBuilder,
+  FormGroup,
+  FormArray,
+  Validators,
+  AbstractControl,
+} from '@angular/forms';
+import { take } from 'rxjs/operators';
 import { PokemonStore, Pokemon } from '../../state/pokemon.store';
 import { TrainerStore, Team } from '../../state/trainer.store';
 import { uniqueTeamNameValidator, evSpreadValidator } from '../../utils/validators';
 import { StatsAnalysisService } from '../../services/stats-analysis.service';
 import { TeamCoverageResult } from '../../workers/stats-analysis.worker';
-import { take } from 'rxjs/operators';
 
 interface PokemonOption {
   id: number;
@@ -26,38 +45,41 @@ interface PokemonOption {
   template: `
     <div class="team-builder-container">
       <div class="team-builder-header">
-        <a routerLink="/teams" class="back-link">← Back to Teams</a>
-        <h2>Team Builder</h2>
-        <p>Build your ultimate Pokémon team with custom nicknames and items</p>
+        <a routerLink="/teams" class="back-link" (click)="onBackClick($event)">← Back to Teams</a>
+        <h2>{{ isEditMode() ? 'Edit Team' : 'Advanced Team Builder' }}</h2>
+        <p>{{ isEditMode() ? 'Update your squad, nicknames, held items, and competitive EV spreads.' : 'Build your ultimate Pokémon team with custom nicknames and items.' }}</p>
       </div>
       
       <form [formGroup]="teamForm" (ngSubmit)="saveTeam()" class="team-form">
-        <!-- Team Name Field -->
+        <!-- Team Name -->
         <div class="form-group">
-          <label>Team Name <span class="required">*</span></label>
-          <input 
-            type="text" 
-            formControlName="teamName" 
-            placeholder="Enter team name (3-30 characters)"
-            [class.error]="teamForm.get('teamName')?.invalid && teamForm.get('teamName')?.touched"
+          <label for="team-name-input">Team Name <span class="required">*</span></label>
+          <input
+            id="team-name-input"
+            type="text"
+            formControlName="teamName"
+            placeholder="Enter team name (3–30 characters)"
+            [class.error]="showControlError('teamName')"
           >
-          <div class="error-messages" *ngIf="teamForm.get('teamName')?.touched">
+          <div class="error-messages" *ngIf="showControlError('teamName') || teamForm.get('teamName')?.pending">
+            <small *ngIf="teamForm.get('teamName')?.pending">Checking name availability…</small>
             <small *ngIf="teamForm.get('teamName')?.errors?.['required']">Team name is required</small>
             <small *ngIf="teamForm.get('teamName')?.errors?.['minlength']">Team name must be at least 3 characters</small>
             <small *ngIf="teamForm.get('teamName')?.errors?.['maxlength']">Team name cannot exceed 30 characters</small>
             <small *ngIf="teamForm.get('teamName')?.errors?.['uniqueName']">Team name already exists</small>
           </div>
         </div>
-        
-        <!-- Add Pokémon via select -->
+
+        <!-- Pokémon roster -->
         <div class="form-group">
-          <label>Add Pokémon <span class="required">*</span> ({{ selectedPokemon().length }}/6)</label>
+          <label for="pokemon-roster-select">Pokémon roster <span class="required">*</span> ({{ selectedPokemon().length }}/6)</label>
           <select
+            id="pokemon-roster-select"
             class="pokemon-select"
             [ngModel]="pickerPokemonId()"
             (ngModelChange)="onPokemonSelect($event)"
-            [ngModelOptions]="{standalone: true}"
-            [disabled]="selectedPokemon().length >= 6 || availablePokemonOptions().length === 0"
+            [ngModelOptions]="{ standalone: true }"
+            [disabled]="selectedPokemon().length >= 6 || catalogLoading()"
           >
             <option [ngValue]="''">
               {{ catalogLoading() ? 'Loading Pokémon...' : 'Choose a Pokémon to add...' }}
@@ -67,22 +89,45 @@ interface PokemonOption {
             </option>
           </select>
           <p class="picker-hint" *ngIf="selectedPokemon().length >= 6">Team is full (6/6). Remove a Pokémon to add another.</p>
-          
-          <!-- Selected Pokémon Chips (drag to reorder — Bonus 2) -->
-          <p class="drag-hint">Drag chips to reorder your squad.</p>
-          <div class="selected-pokemon" cdkDropList (cdkDropListDropped)="dropReorderTeam($event)">
+
+          <p class="drag-hint" *ngIf="selectedPokemon().length">Drag chips to reorder your squad.</p>
+          <div
+            class="selected-pokemon"
+            cdkDropList
+            (cdkDropListDropped)="dropReorderTeam($event)"
+            [class.empty-roster]="!selectedPokemon().length">
             <div *ngFor="let pokemon of selectedPokemon(); let i = index" class="pokemon-chip" cdkDrag>
               <img [src]="pokemon.sprite" [alt]="pokemon.name">
               <span>{{ pokemon.name | titlecase }}</span>
-              <button type="button" class="remove-chip" (click)="removePokemon(i)">✕</button>
+              <button type="button" class="remove-chip" (click)="removePokemon(i)" aria-label="Remove Pokémon">✕</button>
             </div>
+            <p class="roster-empty" *ngIf="!selectedPokemon().length">Add at least one Pokémon from the list above.</p>
           </div>
-          <div class="error-messages" *ngIf="teamForm.get('pokemonArray')?.touched">
+          <div class="error-messages" *ngIf="showSquadErrors()">
             <small *ngIf="selectedPokemon().length === 0">At least 1 Pokémon is required</small>
             <small *ngIf="selectedPokemon().length > 6">Maximum 6 Pokémon allowed</small>
           </div>
         </div>
-        
+
+        <!-- Competitive Mode Toggle -->
+        <div class="form-group competitive-toggle">
+          <label class="toggle-switch">
+            <input type="checkbox" [ngModel]="competitiveMode()" (ngModelChange)="toggleCompetitiveMode($event)" [ngModelOptions]="{standalone: true}">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label">Competitive Mode</span>
+        </div>
+
+        <div class="form-group" *ngIf="competitiveMode()">
+          <label for="tier-select">Tier</label>
+          <select id="tier-select" formControlName="tier">
+            <option value="ou">OverUsed (OU)</option>
+            <option value="uu">UnderUsed (UU)</option>
+            <option value="ru">RarelyUsed (RU)</option>
+            <option value="nu">NeverUsed (NU)</option>
+          </select>
+        </div>
+
         <!-- Pokémon Sub-forms (Dynamic FormArray) -->
 <div class="pokemon-subforms" formArrayName="pokemonArray">
   <div *ngFor="let pokemonCtrl of pokemonArray.controls; let i = index" [formGroupName]="i" class="pokemon-subform">
@@ -121,30 +166,32 @@ interface PokemonOption {
             <div class="ev-grid">
               <div class="ev-input">
                 <label>HP</label>
-                <input type="number" formControlName="evHp" min="0" max="252" (change)="validateEvTotal()">
+                <input type="number" formControlName="evHp" min="0" max="252" (change)="validateEvTotal()" (blur)="validateEvTotal()">
               </div>
               <div class="ev-input">
                 <label>Attack</label>
-                <input type="number" formControlName="evAtk" min="0" max="252" (change)="validateEvTotal()">
+                <input type="number" formControlName="evAtk" min="0" max="252" (change)="validateEvTotal()" (blur)="validateEvTotal()">
               </div>
               <div class="ev-input">
                 <label>Defense</label>
-                <input type="number" formControlName="evDef" min="0" max="252" (change)="validateEvTotal()">
+                <input type="number" formControlName="evDef" min="0" max="252" (change)="validateEvTotal()" (blur)="validateEvTotal()">
               </div>
               <div class="ev-input">
                 <label>Sp. Atk</label>
-                <input type="number" formControlName="evSpAtk" min="0" max="252" (change)="validateEvTotal()">
+                <input type="number" formControlName="evSpAtk" min="0" max="252" (change)="validateEvTotal()" (blur)="validateEvTotal()">
               </div>
               <div class="ev-input">
                 <label>Sp. Def</label>
-                <input type="number" formControlName="evSpDef" min="0" max="252" (change)="validateEvTotal()">
+                <input type="number" formControlName="evSpDef" min="0" max="252" (change)="validateEvTotal()" (blur)="validateEvTotal()">
               </div>
               <div class="ev-input">
                 <label>Speed</label>
-                <input type="number" formControlName="evSpeed" min="0" max="252" (change)="validateEvTotal()">
+                <input type="number" formControlName="evSpeed" min="0" max="252" (change)="validateEvTotal()" (blur)="validateEvTotal()">
               </div>
             </div>
-            <small class="ev-error" *ngIf="getEvTotal(pokemonCtrl) !== 510 && getEvTotal(pokemonCtrl) !== 0">
+            <small
+              class="ev-error"
+              *ngIf="competitiveMode() && showEvError(pokemonCtrl)">
               EV total must be exactly 510 for {{ selectedPokemon()[i].name }} (current: {{ getEvTotal(pokemonCtrl) }})
             </small>
           </div>
@@ -152,26 +199,7 @@ interface PokemonOption {
       </div>
     </div>
   </div>
-        <!-- Competitive Mode Toggle -->
-        <div class="form-group competitive-toggle">
-          <label class="toggle-switch">
-            <input type="checkbox" [ngModel]="competitiveMode()" (ngModelChange)="toggleCompetitiveMode($event)" [ngModelOptions]="{standalone: true}">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-label">Competitive Mode</span>
-        </div>
-        
-        <!-- Tier Select (Conditional) -->
-        <div class="form-group" *ngIf="competitiveMode()">
-          <label>Tier</label>
-          <select formControlName="tier">
-            <option value="ou">OverUsed (OU)</option>
-            <option value="uu">UnderUsed (UU)</option>
-            <option value="ru">RarelyUsed (RU)</option>
-            <option value="nu">NeverUsed (NU)</option>
-          </select>
-        </div>
-        
+
         <!-- Web Worker coverage (Bonus 4) -->
         <div class="coverage-banner" *ngIf="coverageResult() as cov">
           <strong>Worker analysis ({{ cov.elapsedMs | number:'1.0-1' }}ms):</strong>
@@ -179,20 +207,23 @@ interface PokemonOption {
           <p>Weak coverage: {{ cov.uncoveredTypes.join(', ') || '—' }}</p>
         </div>
 
-        <!-- Type Weakness Warning Banner -->
-        <div class="warning-banner" *ngIf="hasTypeWeaknessGap()">
+        <!-- Advisory: type coverage (does not block save) -->
+        <div class="warning-banner advisory" *ngIf="hasTypeWeaknessGap()">
           <span class="warning-icon">⚠️</span>
           <div class="warning-content">
-            <strong>Type Weakness Detected!</strong>
-            <p>Your team has a weakness gap against {{ weaknessTypes().join(', ') }} types. Consider adding counters.</p>
+            <strong>Advisory: type weakness gap</strong>
+            <p>Your squad may struggle against {{ weaknessTypes().join(', ') }} types. Consider adding counters — you can still save this team.</p>
           </div>
         </div>
         
         <!-- Form Actions -->
         <div class="form-actions">
           <button type="button" class="btn-secondary" (click)="resetForm()">Reset</button>
-          <button type="submit" class="btn-primary" [disabled]="teamForm.invalid || selectedPokemon().length === 0 || selectedPokemon().length > 6">
-            Save Team
+          <button
+            type="submit"
+            class="btn-primary"
+            [disabled]="teamForm.invalid || selectedPokemon().length === 0 || selectedPokemon().length > 6 || teamForm.get('teamName')?.pending">
+            {{ isEditMode() ? 'Update Team' : 'Save Team' }}
           </button>
         </div>
       </form>
@@ -329,6 +360,17 @@ interface PokemonOption {
         flex-wrap: wrap;
         gap: 10px;
         margin-top: 12px;
+        min-height: 44px;
+
+        &.empty-roster {
+          align-items: center;
+        }
+
+        .roster-empty {
+          margin: 0;
+          font-size: 13px;
+          color: var(--text-muted);
+        }
         
         .pokemon-chip {
           display: flex;
@@ -506,6 +548,10 @@ interface PokemonOption {
         border: 1px solid var(--warning-border);
         border-radius: 12px;
         margin-bottom: 24px;
+
+        &.advisory {
+          border-style: dashed;
+        }
         
         .warning-icon {
           font-size: 24px;
@@ -653,27 +699,36 @@ export class TeamBuilderComponent implements OnInit {
   private pokemonStore = inject(PokemonStore);
   private trainerStore = inject(TrainerStore);
   private statsAnalysis = inject(StatsAnalysisService);
-  private router = inject(Router);
   private destroyRef = inject(DestroyRef);
+
+  /** When set, loads and updates this team instead of creating a new one. */
+  teamId = input<number | null>(null);
+  trainerId = input<number>(1);
 
   /** Emitted when a team is persisted successfully. */
   teamSaved = output<Team>();
+  cancelEdit = output<void>();
+
+  isEditMode = computed(() => this.teamId() != null);
 
   teamForm!: FormGroup;
   pickerPokemonId = signal<number | ''>('');
   catalogLoading = signal(false);
+  squadTouched = signal(false);
   selectedPokemon = signal<PokemonOption[]>([]);
   competitiveMode = signal(false);
   toastMessage = signal('');
   toastType = signal('');
   existingTeams: Team[] = [];
   coverageResult = signal<TeamCoverageResult | null>(null);
-  private allPokemon: Pokemon[] = [];
+  /** Catalog for the roster dropdown; must be a signal so OnPush + computed stay in sync. */
+  private allPokemon = signal<Pokemon[]>([]);
+  private loadedEditTeamId: number | null = null;
 
-  /** Pokémon not yet on the team, mapped for the add dropdown. */
+  /** Pokémon not yet on the team, for the add dropdown. */
   availablePokemonOptions = computed((): PokemonOption[] => {
     const selectedIds = new Set(this.selectedPokemon().map((p) => p.id));
-    return this.allPokemon
+    return this.allPokemon()
       .filter((p) => !selectedIds.has(p.id))
       .map((p) => this.toPokemonOption(p))
       .sort((a, b) => a.id - b.id);
@@ -694,6 +749,18 @@ export class TeamBuilderComponent implements OnInit {
           error: () => this.coverageResult.set(null),
         });
     }, { allowSignalWrites: true });
+
+    effect(() => {
+      if (this.teamId() == null && this.loadedEditTeamId != null) {
+        this.loadedEditTeamId = null;
+        this.resetForm(false);
+      }
+    }, { allowSignalWrites: true });
+  }
+
+  onBackClick(event: Event): void {
+    event.preventDefault();
+    this.cancelEdit.emit();
   }
 
   get pokemonArray(): FormArray {
@@ -707,30 +774,77 @@ export class TeamBuilderComponent implements OnInit {
     this.loadPokemonCatalog();
   }
 
+  onPokemonSelect(id: number | string | ''): void {
+    if (id === '' || id == null) {
+      return;
+    }
+    const pokemon = this.availablePokemonOptions().find((p) => p.id === Number(id));
+    if (!pokemon) {
+      return;
+    }
+    this.addPokemon(pokemon);
+    this.pickerPokemonId.set('');
+  }
+
+  showControlError(controlName: string): boolean {
+    const ctrl = this.teamForm.get(controlName);
+    return !!(ctrl && ctrl.invalid && (ctrl.touched || ctrl.dirty));
+  }
+
+  showSquadErrors(): boolean {
+    const count = this.selectedPokemon().length;
+    return this.squadTouched() && (count === 0 || count > 6);
+  }
+
+  showSubcontrolError(group: AbstractControl, name: string): boolean {
+    const ctrl = group.get(name);
+    return !!(ctrl && ctrl.invalid && (ctrl.touched || ctrl.dirty));
+  }
+
+  showEvError(pokemonCtrl: AbstractControl): boolean {
+    const touched = Object.keys((pokemonCtrl as FormGroup).controls).some((key) => {
+      const c = pokemonCtrl.get(key);
+      return c && (c.touched || c.dirty);
+    });
+    const total = this.getEvTotal(pokemonCtrl);
+    return touched && total !== 0 && total !== 510;
+  }
+
   /** Loads Pokémon list from store cache or fetches from PokéAPI for the add dropdown. */
   loadPokemonCatalog() {
     this.pokemonStore.pokemon$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((list) => {
-        this.allPokemon = list ?? [];
+        this.allPokemon.set(list ?? []);
         if (list?.length) {
           this.catalogLoading.set(false);
+          this.tryLoadTeamForEdit();
         }
       });
     const cached = this.pokemonStore.getState().pokemon?.length ?? 0;
-    if (cached === 0) {
-      this.catalogLoading.set(true);
-      this.pokemonStore
-        .fetchPokemon(151, 0)
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe({
-          next: () => this.catalogLoading.set(false),
-          error: () => {
-            this.catalogLoading.set(false);
-            this.showToast('Could not load Pokémon list.', 'error');
-          },
-        });
+    if (cached > 0) {
+      this.allPokemon.set(this.pokemonStore.getState().pokemon);
+      this.catalogLoading.set(false);
+      this.tryLoadTeamForEdit();
+      return;
     }
+    this.catalogLoading.set(true);
+    this.pokemonStore
+      .fetchAllPokemon()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.allPokemon.set(this.pokemonStore.getState().pokemon);
+          this.catalogLoading.set(false);
+          this.tryLoadTeamForEdit();
+        },
+        error: () => {
+          this.catalogLoading.set(false);
+          if (!this.allPokemon().length) {
+            this.showToast('Could not load Pokémon list.', 'error');
+          }
+        },
+      });
   }
 
   /** Maps store Pokémon to dropdown/chip option shape. */
@@ -743,24 +857,6 @@ export class TeamBuilderComponent implements OnInit {
     };
   }
 
-  /**
-   * Adds the Pokémon chosen from the select to the team.
-   *
-   * @param id - Selected Pokémon id from dropdown
-   */
-  onPokemonSelect(id: number | string | ''): void {
-    if (id === '' || id == null) {
-      return;
-    }
-    const numericId = Number(id);
-    const pokemon = this.availablePokemonOptions().find((p) => p.id === numericId);
-    if (!pokemon) {
-      return;
-    }
-    this.addPokemon(pokemon);
-    this.pickerPokemonId.set('');
-  }
-  
   initForm() {
     this.teamForm = this.fb.group({
       teamName: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(30)]],
@@ -770,15 +866,59 @@ export class TeamBuilderComponent implements OnInit {
   }
   
   loadExistingTeams() {
-    this.trainerStore.fetchTeams(1).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((teams) => {
-      this.existingTeams = teams;
-      this.teamForm.get('teamName')?.updateValueAndValidity();
-    });
+    this.trainerStore
+      .fetchTeams(this.trainerId())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((teams) => {
+        this.existingTeams = teams;
+        this.teamForm.get('teamName')?.updateValueAndValidity();
+        this.tryLoadTeamForEdit();
+      });
   }
-  
+
+  /** Loads team data into the form when editing (after catalog + teams are ready). */
+  private tryLoadTeamForEdit(): void {
+    const id = this.teamId();
+    if (!id || !this.allPokemon().length) {
+      return;
+    }
+    const team = this.existingTeams.find((t) => t.id === id);
+    if (!team || this.loadedEditTeamId === id) {
+      return;
+    }
+    this.populateFromTeam(team);
+    this.loadedEditTeamId = id;
+  }
+
+  private populateFromTeam(team: Team): void {
+    this.resetForm(false);
+    this.teamForm.patchValue({ teamName: team.name });
+    for (const id of team.pokemon_ids.slice(0, 6)) {
+      const fromCatalog = this.allPokemon().find((p) => p.id === id);
+      const option: PokemonOption = fromCatalog
+        ? this.toPokemonOption(fromCatalog)
+        : {
+            id,
+            name: `pokemon-${id}`,
+            types: [],
+            sprite: this.getPokemonSprite(id),
+          };
+      this.addPokemon(option);
+    }
+  }
+
   setupAsyncValidator() {
     this.teamForm.get('teamName')?.setAsyncValidators(
-      uniqueTeamNameValidator(() => this.existingTeams.map((team) => team.name))
+      uniqueTeamNameValidator(
+        () => this.existingTeams.map((team) => team.name),
+        () => {
+          const id = this.teamId();
+          if (!id) {
+            return null;
+          }
+          return this.existingTeams.find((t) => t.id === id)?.name ?? null;
+        }
+      )
     );
   }
 
@@ -812,8 +952,7 @@ export class TeamBuilderComponent implements OnInit {
     }
 
     this.selectedPokemon.update((list) => [...list, pokemon]);
-    this.pickerPokemonId.set('');
-    
+
     // Add to FormArray
     const pokemonGroup = this.fb.group({
       nickname: [''],
@@ -914,11 +1053,16 @@ export class TeamBuilderComponent implements OnInit {
   }
   
   saveTeam() {
+    this.teamForm.markAllAsTouched();
+    this.squadTouched.set(true);
+    this.pokemonArray.controls.forEach((ctrl) => ctrl.markAllAsTouched());
+    this.validateEvTotal();
+
     if (this.teamForm.invalid) {
       this.showToast('Please fix all errors before saving', 'error');
       return;
     }
-    
+
     if (this.selectedPokemon().length === 0 || this.selectedPokemon().length > 6) {
       this.showToast('Team must have between 1 and 6 Pokémon', 'error');
       return;
@@ -951,19 +1095,29 @@ export class TeamBuilderComponent implements OnInit {
       })) : null
     };
     
-    this.trainerStore
-      .createTeam(1, teamData.name, teamData.pokemon_ids)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (team) => {
-          this.teamSaved.emit(team);
-          this.showToast('Team saved successfully!', 'success');
-          this.resetForm(false);
-          this.router.navigate(['/teams']);
-        },
-        error: () =>
-          this.showToast('Failed to save team. Run: npm run mock:graphql', 'error'),
-      });
+    const editId = this.teamId();
+    const request$ = editId
+      ? this.trainerStore.updateTeam(editId, teamData.name, teamData.pokemon_ids)
+      : this.trainerStore.createTeam(this.trainerId(), teamData.name, teamData.pokemon_ids);
+
+    request$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (team) => {
+        this.teamSaved.emit(team);
+        this.showToast(
+          editId ? 'Team updated successfully!' : 'Team saved successfully!',
+          'success'
+        );
+        this.loadedEditTeamId = null;
+        this.resetForm(false);
+      },
+      error: () =>
+        this.showToast(
+          editId
+            ? 'Failed to update team. Run: npm run mock:graphql'
+            : 'Failed to save team. Run: npm run mock:graphql',
+          'error'
+        ),
+    });
   }
 
   resetForm(showMessage = true) {
@@ -973,7 +1127,11 @@ export class TeamBuilderComponent implements OnInit {
       this.pokemonArray.removeAt(0);
     }
     this.pickerPokemonId.set('');
+    this.squadTouched.set(false);
     this.competitiveMode.set(false);
+    if (!this.teamId()) {
+      this.loadedEditTeamId = null;
+    }
     if (showMessage) {
       this.showToast('Form reset', 'info');
     }

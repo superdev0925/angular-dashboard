@@ -1,7 +1,18 @@
-import { ChangeDetectionStrategy, Component, OnInit, effect, inject, input, output, ViewChild, ElementRef } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  ViewChild,
+  ElementRef,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { PokemonService } from '../../services/pokemon.service';
 import { PokemonStore } from '../../state/pokemon.store';
 import { TrainerStore, Team } from '../../state/trainer.store';
 
@@ -27,9 +38,9 @@ interface PokemonData {
     <div class="modal-overlay" [class.show]="isOpen()" (click)="handleOverlayClick()">
       <div class="modal-container" (click)="$event.stopPropagation()" [class.slide-up]="isOpen()">
         <div class="modal-header">
-          <button type="button" class="back-btn" (click)="handleClose()">←</button>
-          <h2>Create New Team</h2>
-          <button type="button" class="close-btn" (click)="handleClose()">✕</button>
+          <span class="header-spacer" aria-hidden="true"></span>
+          <h2>{{ isEditMode() ? 'Edit Team' : 'Create New Team' }}</h2>
+          <button type="button" class="close-btn" (click)="handleClose()" aria-label="Close">✕</button>
         </div>
         
         <div class="modal-body">
@@ -93,7 +104,9 @@ interface PokemonData {
             
             <div class="form-actions">
               <button type="button" class="btn-cancel" (click)="handleClose()">Cancel</button>
-              <button type="submit" class="btn-create" [disabled]="teamForm.invalid || selectedPokemon.length === 0">Create Team</button>
+              <button type="submit" class="btn-create" [disabled]="teamForm.invalid || selectedPokemon.length === 0">
+                {{ isEditMode() ? 'Save Changes' : 'Create Team' }}
+              </button>
             </div>
           </form>
         </div>
@@ -102,19 +115,13 @@ interface PokemonData {
   `,
   styles: [`
     :host {
-      --modal-bg: #1e293b;
-      --modal-surface: rgba(30, 41, 59, 0.92);
-      --modal-border: rgba(148, 163, 184, 0.18);
-      --modal-text: #f1f5f9;
-      --modal-muted: #94a3b8;
-      --modal-accent: #7c3aed;
-      --modal-accent-hover: #6d28d9;
+      display: block;
     }
 
     .modal-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(2, 6, 23, 0.72);
+      background: var(--team-dialog-overlay);
       backdrop-filter: blur(6px);
       z-index: 1000;
       display: flex;
@@ -131,15 +138,15 @@ interface PokemonData {
     }
 
     .modal-container {
-      background: linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
-      border: 1px solid var(--modal-border);
+      background: var(--team-dialog-panel);
+      border: 1px solid var(--team-dialog-border);
       border-radius: 16px;
       width: 90%;
       max-width: 640px;
       max-height: 85vh;
       overflow-y: auto;
-      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(124, 58, 237, 0.12);
-      color: var(--modal-text);
+      box-shadow: var(--team-dialog-panel-shadow);
+      color: var(--team-dialog-text);
       transform: translateY(-24px);
       transition: transform 0.35s ease;
 
@@ -154,35 +161,40 @@ interface PokemonData {
       align-items: center;
       gap: 12px;
       padding: 18px 22px;
-      border-bottom: 1px solid var(--modal-border);
-      background: rgba(15, 23, 42, 0.5);
+      border-bottom: 1px solid var(--team-dialog-border);
+      background: var(--team-dialog-header-bg);
 
       h2 {
         flex: 1;
         font-size: 1.25rem;
         margin: 0;
         font-weight: 600;
-        color: var(--modal-text);
+        color: var(--team-dialog-text);
       }
 
-      .back-btn,
+      .header-spacer {
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+      }
+
       .close-btn {
-        background: rgba(148, 163, 184, 0.1);
-        border: 1px solid var(--modal-border);
+        background: var(--team-dialog-close-bg);
+        border: 1px solid var(--team-dialog-border);
         border-radius: 8px;
         width: 36px;
         height: 36px;
         font-size: 18px;
         cursor: pointer;
-        color: var(--modal-muted);
+        color: var(--team-dialog-muted);
         display: flex;
         align-items: center;
         justify-content: center;
         transition: background 0.2s, color 0.2s;
 
         &:hover {
-          background: rgba(124, 58, 237, 0.2);
-          color: var(--modal-text);
+          background: var(--team-dialog-close-hover-bg);
+          color: var(--team-dialog-text);
         }
       }
     }
@@ -199,7 +211,7 @@ interface PokemonData {
         margin-bottom: 8px;
         font-weight: 500;
         font-size: 13px;
-        color: var(--modal-muted);
+        color: var(--team-dialog-muted);
       }
 
       .required {
@@ -210,15 +222,15 @@ interface PokemonData {
       select {
         width: 100%;
         padding: 10px 14px;
-        border: 1px solid var(--modal-border);
+        border: 1px solid var(--team-dialog-border);
         border-radius: 10px;
-        background: rgba(15, 23, 42, 0.8);
-        color: var(--modal-text);
+        background: var(--team-dialog-input-bg);
+        color: var(--team-dialog-text);
         font-size: 14px;
         transition: border-color 0.2s, box-shadow 0.2s;
 
         &::placeholder {
-          color: #64748b;
+          color: var(--team-dialog-input-placeholder);
         }
 
         &:focus {
@@ -232,8 +244,8 @@ interface PokemonData {
         cursor: pointer;
 
         option {
-          background: #1e293b;
-          color: var(--modal-text);
+          background: var(--team-dialog-select-option-bg);
+          color: var(--team-dialog-text);
         }
       }
 
@@ -255,7 +267,7 @@ interface PokemonData {
     }
 
     .slot-card {
-      border: 2px dashed rgba(148, 163, 184, 0.35);
+      border: 2px dashed var(--team-dialog-slot-border);
       border-radius: 12px;
       min-height: 120px;
       display: flex;
@@ -266,21 +278,21 @@ interface PokemonData {
       cursor: pointer;
       padding: 12px;
       position: relative;
-      background: rgba(15, 23, 42, 0.6);
+      background: var(--team-dialog-slot-bg);
       font-size: 12px;
-      color: var(--modal-muted);
+      color: var(--team-dialog-muted);
       transition: border-color 0.2s, background 0.2s;
 
       &:hover {
-        border-color: rgba(167, 139, 250, 0.5);
-        background: rgba(124, 58, 237, 0.08);
+        border-color: var(--team-dialog-slot-hover-border);
+        background: var(--team-dialog-slot-hover-bg);
       }
 
       &.filled {
         border-style: solid;
-        border-color: rgba(124, 58, 237, 0.45);
-        background: rgba(30, 41, 59, 0.9);
-        color: var(--modal-text);
+        border-color: var(--team-dialog-slot-filled-border);
+        background: var(--team-dialog-slot-filled-bg);
+        color: var(--team-dialog-text);
       }
 
       img {
@@ -291,7 +303,7 @@ interface PokemonData {
 
       .plus {
         font-size: 28px;
-        color: #a78bfa;
+        color: var(--team-dialog-plus-color);
         font-weight: 300;
       }
 
@@ -299,9 +311,9 @@ interface PokemonData {
         position: absolute;
         top: 6px;
         right: 6px;
-        border: 1px solid var(--modal-border);
-        background: rgba(30, 41, 59, 0.95);
-        color: var(--modal-muted);
+        border: 1px solid var(--team-dialog-border);
+        background: var(--team-dialog-remove-bg);
+        color: var(--team-dialog-muted);
         border-radius: 50%;
         width: 22px;
         height: 22px;
@@ -334,21 +346,21 @@ interface PokemonData {
       gap: 12px;
       margin-top: 24px;
       padding-top: 18px;
-      border-top: 1px solid var(--modal-border);
+      border-top: 1px solid var(--team-dialog-border);
 
       .btn-cancel {
         padding: 10px 20px;
-        border: 1px solid var(--modal-border);
+        border: 1px solid var(--team-dialog-border);
         border-radius: 10px;
-        background: rgba(15, 23, 42, 0.8);
-        color: var(--modal-muted);
+        background: var(--team-dialog-btn-cancel-bg);
+        color: var(--team-dialog-muted);
         cursor: pointer;
         font-weight: 500;
         transition: background 0.2s, color 0.2s;
 
         &:hover {
-          background: rgba(51, 65, 85, 0.8);
-          color: var(--modal-text);
+          background: var(--team-dialog-btn-cancel-hover-bg);
+          color: var(--team-dialog-text);
         }
       }
 
@@ -388,13 +400,17 @@ interface PokemonData {
 export class TeamBuilderModalComponent implements OnInit {
   isOpen = input(false);
   initialPokemonIds = input<number[]>([]);
+  /** When set, modal edits this team instead of creating a new one. */
+  editingTeam = input<Team | null>(null);
   closeModal = output<void>();
-  createTeam = output<{ name: string; pokemon_ids: number[] }>();
+  saveTeam = output<{ id?: number; name: string; pokemon_ids: number[] }>();
+
+  isEditMode = computed(() => this.editingTeam() != null);
   
   private fb = inject(FormBuilder);
-  private pokemonService = inject(PokemonService);
   private pokemonStore = inject(PokemonStore);
   private trainerStore = inject(TrainerStore);
+  private cdr = inject(ChangeDetectorRef);
   
   teamForm!: FormGroup;
   allPokemonOptions: PokemonOption[] = [];
@@ -421,12 +437,39 @@ export class TeamBuilderModalComponent implements OnInit {
     effect(() => {
       const open = this.isOpen();
       const initialIds = this.initialPokemonIds();
-      if (!open) return;
+      const editing = this.editingTeam();
+      if (!open) {
+        return;
+      }
+      if (editing) {
+        this.loadPokemonOptions();
+        return;
+      }
       this.loadPokemonOptions();
       if (initialIds?.length) {
         this.applyInitialPokemon();
       }
     });
+  }
+
+  /** Pre-fills the form when editing an existing team. */
+  private applyEditingTeam(team: Team): void {
+    if (!this.teamForm) {
+      this.initForm();
+    }
+    this.teamForm.patchValue({ teamName: team.name });
+    this.selectedPokemon = team.pokemon_ids.slice(0, 6).map((id) => {
+      const found = this.allPokemonOptions.find((p) => p.id === id);
+      return (
+        found ?? {
+          id,
+          name: `pokemon-${id}`,
+          types: [],
+          sprite: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`,
+        }
+      );
+    });
+    this.cdr.markForCheck();
   }
 
   /** Pre-fills selected Pokémon from Pokédex bulk action. */
@@ -435,13 +478,11 @@ export class TeamBuilderModalComponent implements OnInit {
     if (!ids?.length || !this.allPokemonOptions.length) {
       return;
     }
-    this.selectedPokemon = [];
-    for (const id of ids.slice(0, 6)) {
+    this.selectedPokemon = ids.slice(0, 6).flatMap((id) => {
       const pokemon = this.allPokemonOptions.find((p) => p.id === id);
-      if (pokemon && !this.selectedPokemon.some((p) => p.id === id)) {
-        this.selectedPokemon.push(pokemon);
-      }
-    }
+      return pokemon ? [pokemon] : [];
+    });
+    this.cdr.markForCheck();
   }
   
   private initForm(): void {
@@ -457,20 +498,32 @@ export class TeamBuilderModalComponent implements OnInit {
     const cached = this.pokemonStore.getState().pokemon;
     if (cached?.length) {
       this.allPokemonOptions = this.mapToOptions(cached);
-      this.applyInitialPokemon();
+      const editing = this.editingTeam();
+      if (editing) {
+        this.applyEditingTeam(editing);
+      } else {
+        this.applyInitialPokemon();
+      }
       return;
     }
 
     this.loadingPokemon = true;
-    this.pokemonService.getPokemon(100, 0).subscribe({
-      next: (data: PokemonData[]) => {
-        this.allPokemonOptions = this.mapToOptions(data);
+    this.pokemonStore.fetchAllPokemon().subscribe({
+      next: () => {
+        this.allPokemonOptions = this.mapToOptions(this.pokemonStore.getState().pokemon);
         this.loadingPokemon = false;
-        this.applyInitialPokemon();
+        const editing = this.editingTeam();
+        if (editing) {
+          this.applyEditingTeam(editing);
+        } else {
+          this.applyInitialPokemon();
+        }
+        this.cdr.markForCheck();
       },
       error: () => {
         this.loadingPokemon = false;
-      }
+        this.cdr.markForCheck();
+      },
     });
   }
 
@@ -563,12 +616,14 @@ export class TeamBuilderModalComponent implements OnInit {
       return;
     }
     
+    const editing = this.editingTeam();
     const teamData = {
+      id: editing?.id,
       name: this.teamForm.get('teamName')?.value,
-      pokemon_ids: this.selectedPokemon.map(p => p.id)
+      pokemon_ids: this.selectedPokemon.map((p) => p.id),
     };
-    
-    this.createTeam.emit(teamData);
+
+    this.saveTeam.emit(teamData);
     this.handleClose();
   }
   
